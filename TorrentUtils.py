@@ -5,6 +5,7 @@ import argparse
 
 import bencoder
 
+
 class Torrent():
 
     def __init__(self, torrent_fpath):
@@ -21,6 +22,8 @@ class Torrent():
         pieces_sha1_hex_bytes = bytes()
         piece_bytes = bytes()
         for fpath in fpaths:
+            if fpath.is_dir():
+                continue
             with open(fpath, 'rb') as fobj:
                 while (read_bytes := fobj.read(n_bytes_piece_size - len(piece_bytes))):
                     piece_bytes += read_bytes
@@ -46,9 +49,11 @@ class Torrent():
             info_dict[b'pieces'] = self._calPiecesSha1Hex(fpaths, n_bytes_piece_size)
             info_dict[b'files'] = list()
             for fpath in fpaths:
+                if fpath.is_dir():
+                    continue
                 info_dict[b'files'].append(
                     {b'length': fpath.stat().st_size,
-                     b'path': list(bytes(f, 'utf-8') for f in fpath.relative_to(fpath.parent).parts)})
+                     b'path': list(bytes(f, 'utf-8') for f in fpath.relative_to(dest_path).parts)})
         self.torrent_dict[b'info'] = info_dict
 
     def save(self):
@@ -61,8 +66,8 @@ class Torrent():
 def main(args):
     if args.cmd == 'create':
         print('Creating a new torrent')
-        torrent = Torrent(args.fpath[0])
-        torrent.updateInfoDict(args.fpath[0], args.piece_size, args.private)
+        torrent = Torrent(args.fpaths[0])
+        torrent.updateInfoDict(args.fpaths[0], args.piece_size, args.private)
         torrent.save()
     elif args.cmd == 'check':
         print('Check the torrent integrity')
@@ -84,10 +89,10 @@ def main(args):
                 args.cmd = 'create'
                 raise NotImplementedError
         elif len(args.fpaths) == 2:
-            if args.fpath[0].suffix.lower() == '.torrent':
+            if args.fpaths[0].suffix.lower() == '.torrent':
                 args.cmd = 'verify'
                 raise NotImplementedError
-            elif args.fpath[1].suffix.lower() == '.torrent':
+            elif args.fpaths[1].suffix.lower() == '.torrent':
                 args.cmd = 'verify'
                 raise NotImplementedError
             else:
@@ -98,11 +103,10 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('fpath', nargs='+', type=pathlib.Path)
+    parser.add_argument('fpaths', nargs='+', type=pathlib.Path)
     parser.add_argument('-c', '--cmd', choices=('create', 'check', 'verify', 'modify'), default=None)
-    parser.add_argument('-s', '--piece-size', dest='piece_size', nargs=1, default=20, type=int)
+    parser.add_argument('-s', '--piece-size', dest='piece_size', nargs=1, default=22, type=int)
     parser.add_argument('-p', '--private', action='store_true')
     parser.add_argument('-t', '--tracker', action='extend', nargs='+', type=str)
     parser.add_argument('--comment', nargs=1, type=str)
-    print(parser.parse_args())
     main(parser.parse_args())
