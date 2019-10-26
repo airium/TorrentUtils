@@ -71,10 +71,11 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('cmd', choices=('create', 'check', 'change'))
     parser.add_argument('fpath', nargs='+', type=pathlib.Path)
-    parser.add_argument('-s', '--piece_size', nargs=1, default=20, type=int)
+    parser.add_argument('-c', '--cmd', choices=('create', 'check', 'verify', 'modify'), default=None)
+    parser.add_argument('-s', '--piece-size', dest='piece_size', nargs=1, default=20, type=int)
     parser.add_argument('-p', '--private', action='store_true')
     parser.add_argument('-t', '--tracker', action='extend', nargs='+', type=str)
-    parser.add_argument('-c', '--comment', nargs=1, type=str)
+    parser.add_argument('--comment', nargs=1, type=str)
+    print(parser.parse_args())
     main(parser.parse_args())
