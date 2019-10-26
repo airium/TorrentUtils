@@ -5,7 +5,6 @@ import argparse
 
 import bencoder
 
-
 class Torrent():
 
     def __init__(self, torrent_fpath):
@@ -60,7 +59,6 @@ class Torrent():
 
 
 def main(args):
-    if DEBUG: print(args)
     if args.cmd == 'create':
         torrent = Torrent(args.fpath[0])
         torrent.updateInfoDict(args.fpath[0], args.piece_size, args.private)
