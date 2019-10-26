@@ -60,13 +60,40 @@ class Torrent():
 
 def main(args):
     if args.cmd == 'create':
+        print('Creating a new torrent')
         torrent = Torrent(args.fpath[0])
         torrent.updateInfoDict(args.fpath[0], args.piece_size, args.private)
         torrent.save()
     elif args.cmd == 'check':
+        print('Check the torrent integrity')
         raise NotImplementedError
-    elif args.cmd == 'change':
+    elif args.cmd == 'verify':
+        print('Verify torrent integrity')
         raise NotImplementedError
+    elif args.cmd == 'modify':
+        print('Modify torrent metadata')
+        raise NotImplementedError
+    else: # try to infer cmd from `fpaths` as none was given
+        if len(args.fpaths) == 1:
+            if args.fpaths[0].suffix.lower() == '.torrent':
+                print('Assuming you want to check the torrent')
+                args.cmd = 'check'
+                raise NotImplementedError
+            else:
+                print('Assuming you want to create a torrent')
+                args.cmd = 'create'
+                raise NotImplementedError
+        elif len(args.fpaths) == 2:
+            if args.fpath[0].suffix.lower() == '.torrent':
+                args.cmd = 'verify'
+                raise NotImplementedError
+            elif args.fpath[1].suffix.lower() == '.torrent':
+                args.cmd = 'verify'
+                raise NotImplementedError
+            else:
+                raise ValueError('You must specify at least one torrent')
+        else:
+            raise ValueError('Only 2 paths is allowed')
 
 
 if __name__ == '__main__':
