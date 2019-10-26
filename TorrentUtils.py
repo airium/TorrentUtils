@@ -33,8 +33,7 @@ class Torrent():
         pieces_sha1_hex_bytes += self.calSha1Hex(piece_bytes) if piece_bytes else b''
         return pieces_sha1_hex_bytes
 
-    def updateInfoDict(self, dest_path=None, piece_size=None, private=False, source=None):
-        n_bytes_piece_size = 2 ** piece_size
+    def updateInfoDict(self, dest_path=None, n_bytes_piece_size=None, private=False, source=None):
         info_dict = dict()
         info_dict[b'name'] = bytes(dest_path.name, 'utf-8')
         info_dict[b'piece length'] = n_bytes_piece_size
@@ -67,7 +66,7 @@ def main(args):
     if args.cmd == 'create':
         print('Creating a new torrent')
         torrent = Torrent(args.fpaths[0])
-        torrent.updateInfoDict(args.fpaths[0], args.piece_size, args.private)
+        torrent.updateInfoDict(args.fpaths[0], 1024 * args.piece_size, args.private)
         torrent.save()
     elif args.cmd == 'check':
         print('Check the torrent integrity')
@@ -105,7 +104,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('fpaths', nargs='+', type=pathlib.Path)
     parser.add_argument('-c', '--cmd', choices=('create', 'check', 'verify', 'modify'), default=None)
-    parser.add_argument('-s', '--piece-size', dest='piece_size', nargs=1, default=22, type=int)
+    parser.add_argument('-s', '--piece-size', dest='piece_size', nargs=1, default=16384, type=int)
     parser.add_argument('-p', '--private', action='store_true')
     parser.add_argument('-t', '--tracker', action='extend', nargs='+', type=str)
     parser.add_argument('--comment', nargs=1, type=str)
