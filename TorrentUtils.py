@@ -33,11 +33,11 @@ class Torrent():
     def updateInfoDict(self, dest_path=None, piece_size=None, private=False, source=None):
         n_bytes_piece_size = 2 ** piece_size
         info_dict = dict()
-        info_dict[b'name'] = bytes(dest_path.name, encoding='utf-8')
+        info_dict[b'name'] = bytes(dest_path.name, 'utf-8')
         info_dict[b'piece length'] = n_bytes_piece_size
         info_dict[b'pieces'] = bytes()
         if private: info_dict[b'private'] = 1
-        if source: info_dict[b'source'] = bytes(source, encoding='utf-8')
+        if source: info_dict[b'source'] = bytes(source, 'utf-8')
         if dest_path.is_file(): # torrent of single file
             info_dict[b'pieces'] = self._calPiecesSha1Hex([dest_path], n_bytes_piece_size)
             info_dict[b'length'] = dest_path.stat().st_size
@@ -46,9 +46,9 @@ class Torrent():
             info_dict[b'pieces'] = self._calPiecesSha1Hex(fpaths, n_bytes_piece_size)
             info_dict[b'files'] = list()
             for fpath in fpaths:
-                fpath_in_torrent = str(fpath.relative_to(fpath.parent)).replace('\\', '/').split('/')
-                fpath_in_torrent = list(bytes(segment, encoding='utf-8') for segment in fpath_in_torrent)
-                info_dict[b'files'].append({b'length': fpath.stat().st_size, b'path': fpath_in_torrent})
+                info_dict[b'files'].append(
+                    {b'length': fpath.stat().st_size,
+                     b'path': list(bytes(f, 'utf-8') for f in fpath.relative_to(fpath.parent).parts)})
         self.torrent_dict[b'info'] = info_dict
 
     def save(self):
