@@ -62,9 +62,13 @@ class Torrent():
         print(f'Torrent saved to {torrent_fpath.absolute()}')
 
 
-def main(args):
+def resolveArgs(args):
+    ret_mode = str()
+    ret_fpath_dict = dict()
+    ret_metadata_dict = dict()
+
     if args.cmd == 'create':
-        print('Creating a new torrent')
+        print(f'Creating a new torrent from {args.cmd.}')
         torrent = Torrent(args.fpaths[0])
         torrent.updateInfoDict(args.fpaths[0], 1024 * args.piece_size, args.private)
         torrent.save()
@@ -94,10 +98,29 @@ def main(args):
             elif args.fpaths[1].suffix.lower() == '.torrent':
                 args.cmd = 'verify'
                 raise NotImplementedError
-            else:
-                raise ValueError('You must specify at least one torrent')
-        else:
-            raise ValueError('Only 2 paths is allowed')
+
+    return ret_mode, ret_fpath_dict, ret_metadata_dict
+
+
+def main(args):
+    mode, fpaths_dict, metadata_dict = resolveArgs(args)
+    torrent = Torrent(**fpaths_dict)
+    if mode == 'create':
+        torrent.updateInfoDict()
+        torrent.updateMetaData(**metadata_dict)
+        torrent.save()
+    elif mode == 'check':
+        torrent.loadTorrent()
+        torrent.checkTorrent()
+    elif mode == 'verify':
+        torrent.loadTorrent()
+        torrent.verifyContent()
+    elif mode == 'modify':
+        torrent.loadTorrent()
+        torrent.updateMetadata(**metadata)
+        torrent.save()
+    else:
+        raise ValueError
 
 
 if __name__ == '__main__':
