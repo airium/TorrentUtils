@@ -42,6 +42,8 @@ class Torrent():
             torrent_dict[b'announce'] = bytes(self.tracker_list[0], self.encoding)
         if self.tracker_list[1:]:
             torrent_dict[b'announce-list'] = list(bytes(url, self.encoding) for url in self.tracker_list)
+        if self.comment:
+            torrent_dict[b'comment'] = bytes(self.comment, self.encoding)
         if self.creation_time:
             torrent_dict[b'creation data'] = self.creation_time
         if self.creation_tool:
