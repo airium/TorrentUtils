@@ -6,17 +6,22 @@ import argparse
 import bencoder
 
 
+
+
 class Torrent():
+
 
     def __init__(self, torrent_fpath):
         self.torrent_fpath = torrent_fpath
         self.torrent_dict = dict()
+
 
     @staticmethod
     def calSha1Hex(b: bytes, /) -> bytes:
         sha1_hasher = hashlib.sha1()
         sha1_hasher.update(b)
         return bytes.fromhex(sha1_hasher.hexdigest())
+
 
     def _calPiecesSha1Hex(self, fpaths, n_bytes_piece_size):
         pieces_sha1_hex_bytes = bytes()
@@ -32,6 +37,7 @@ class Torrent():
                         piece_bytes = bytes()
         pieces_sha1_hex_bytes += self.calSha1Hex(piece_bytes) if piece_bytes else b''
         return pieces_sha1_hex_bytes
+
 
     def updateInfoDict(self, dest_path=None, n_bytes_piece_size=None, private=False, source=None):
         info_dict = dict()
@@ -55,6 +61,7 @@ class Torrent():
                      b'path': list(bytes(f, 'utf-8') for f in fpath.relative_to(dest_path).parts)})
         self.torrent_dict[b'info'] = info_dict
 
+
     def save(self):
         torrent_fpath = self.torrent_fpath.with_suffix(f'.{time.strftime("%Y%m%d-%H%M%S%z")}.torrent')
         assert not torrent_fpath.exists()
@@ -62,44 +69,69 @@ class Torrent():
         print(f'Torrent saved to {torrent_fpath.absolute()}')
 
 
+
+
 def resolveArgs(args):
-    ret_mode = str()
-    ret_fpath_dict = dict()
-    ret_metadata_dict = dict()
 
-    if args.cmd == 'create':
-        print(f'Creating a new torrent from {args.cmd.}')
-        torrent = Torrent(args.fpaths[0])
-        torrent.updateInfoDict(args.fpaths[0], 1024 * args.piece_size, args.private)
-        torrent.save()
-    elif args.cmd == 'check':
-        print('Check the torrent integrity')
-        raise NotImplementedError
-    elif args.cmd == 'verify':
-        print('Verify torrent integrity')
-        raise NotImplementedError
-    elif args.cmd == 'modify':
-        print('Modify torrent metadata')
-        raise NotImplementedError
-    else: # try to infer cmd from `fpaths` as none was given
-        if len(args.fpaths) == 1:
-            if args.fpaths[0].suffix.lower() == '.torrent':
-                print('Assuming you want to check the torrent')
-                args.cmd = 'check'
-                raise NotImplementedError
-            else:
-                print('Assuming you want to create a torrent')
-                args.cmd = 'create'
-                raise NotImplementedError
-        elif len(args.fpaths) == 2:
-            if args.fpaths[0].suffix.lower() == '.torrent':
-                args.cmd = 'verify'
-                raise NotImplementedError
-            elif args.fpaths[1].suffix.lower() == '.torrent':
-                args.cmd = 'verify'
-                raise NotImplementedError
 
-    return ret_mode, ret_fpath_dict, ret_metadata_dict
+    def _inferModeFromFpaths(fpaths):
+        ret_mode = None
+
+        if len(fpaths) == 1 and fpaths[0].is_dir():
+            ret_mode = 'create'
+        if len(fpaths) == 1 and fpaths[0].is_file() and fpaths[0].suffix.lower() != '.torrent':
+            ret_mode = 'create'
+        if len(fpaths) == 1 and fpaths[0].is_file() and fpaths[0].suffix.lower() == '.torrent':
+            ret_mode = 'check'
+        if len(fpaths) == 2 and fpaths[0].is_file() and fpaths[0].suffix.lower() == '.torrent':
+            ret_mode = 'verify'
+        if len(fpaths) == 2 and fpaths[1].is_file() and fpaths[1].suffix.lower() == '.torrent':
+            ret_mode = 'verify'
+
+        if ret_mode:
+            return ret_mode
+        raise ValueError
+
+
+    def _sortFpaths(fpaths, mode):
+        ret_fpath_dict = {'torrent_fpath':None, 'content_fpath':None}
+
+        if mode == 'create' and len(fpaths) == 1:
+            ret_fpath_dict['torrent_fpath'] = fpaths[0].parent.joinpath(fpaths[0].name + '.torrent')
+            ret_fpath_dict['content_fpath'] = fpaths[0]
+        if mode == 'create' and len(fpaths) == 2 and fpaths[1].is_dir():
+            ret_fpath_dict['torrent_fpath'] = fpaths[1].parent.joinpath(fpaths[1].name + '.torrent')
+            ret_fpath_dict['content_fpath'] = fpaths[0]
+        if mode == 'create' and len(fpaths) == 2 and fpaths[1].is_file():
+            ret_fpath_dict['torrent_fpath'] = fpaths[1]
+            ret_fpath_dict['content_fpath'] = fpaths[0]
+        if mode == 'check' and len(fpaths) == 1 and fpaths[0].is_file():
+            ret_fpath_dict['torrent_fpath'] = fpaths[0]
+        if mode == 'verify' and len(fpaths) == 2 and fpaths[1].is_file():
+            ret_fpath_dict['torrent_fpath'] = fpaths[1]
+            ret_fpath_dict['content_fpath'] = fpaths[0]
+        if mode == 'modfiy' and len(fpaths) == 1 and fpaths[0].is_file():
+            ret_fpath_dict['torrent_fpath'] = fpaths[0]
+
+        if ret_fpath_dict['torrent_fpath']:
+            return ret_fpath_dict
+        raise ValueError
+
+
+    def _pickMetadata(args):
+        ret_metadata_dict = dict()
+        ret_metadata_dict['tracker_list'] = args.tracker_list if args.tracker_list else []
+        ret_metadata_dict['creation_tool'] = args.creation_tool if args.creation_tool else ''
+        ret_metadata_dict['creation_time'] = args.creation_time if args.creation_time else 0
+        ret_metadata_dict['encoding'] = args.encoding if args.encoding else ''
+        return ret_metadata_dict
+
+    ret_mode = args.mode if args.mode else _inferModeFromFpaths(args.fpaths)
+    ret_fpaths = _sortFpaths(args.fpaths, ret_mode)
+    ret_metadata_dict = _pickMetadata(args)
+    return ret_mode, ret_fpaths, ret_metadata_dict
+
+
 
 
 def main(args):
@@ -117,16 +149,18 @@ def main(args):
         torrent.verifyContent()
     elif mode == 'modify':
         torrent.loadTorrent()
-        torrent.updateMetadata(**metadata)
+        torrent.updateMetadata(**metadata_dict)
         torrent.save()
     else:
         raise ValueError
 
 
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('fpaths', nargs='+', type=pathlib.Path)
-    parser.add_argument('-c', '--cmd', choices=('create', 'check', 'verify', 'modify'), default=None)
+    parser.add_argument('-m', '--mode', choices=('create', 'check', 'verify', 'modify'), default=None)
     parser.add_argument('-s', '--piece-size', dest='piece_size', nargs=1, default=16384, type=int)
     parser.add_argument('-p', '--private', action='store_true')
     parser.add_argument('-t', '--tracker', action='extend', nargs='+', type=str)
