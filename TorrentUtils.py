@@ -155,7 +155,7 @@ def _resolveArgs(args):
 
         if ret_mode:
             return ret_mode
-        raise ValueError
+        raise ValueError('Failed to infer action mode')
 
 
     def __sortFpaths(fpaths, mode):
@@ -238,12 +238,12 @@ if __name__ == '__main__':
     parser.add_argument('fpaths', nargs='+', type=pathlib.Path)
     parser.add_argument('-m', '--mode', choices=('create', 'check', 'verify', 'modify'), default=None)
     parser.add_argument('-t', '--tracker', action='extend', nargs='+', dest='tracker_list', type=str)
-    parser.add_argument('-s', '--piece-size', dest='piece_size', nargs=1, default=16384, type=int)
-    parser.add_argument('--encoding', nargs=1, dest='encoding', default='utf-8', type=str)
-    parser.add_argument('--comment', nargs=1, dest='comment', type=str)
-    parser.add_argument('--time', nargs=1, dest='creation_time', default=int(time.time()), type=int)
-    parser.add_argument('--tool', nargs=1, dest='creation_tool', default='TorrentUtils', type=str)
-    parser.add_argument('--source', nargs=1, dest='source', type=str)
+    parser.add_argument('-s', '--piece-size', dest='piece_size', default=16384, type=int)
+    parser.add_argument('--encoding', dest='encoding', default='utf-8', type=str)
+    parser.add_argument('--comment', dest='comment', type=str)
+    parser.add_argument('--time', dest='creation_time', default=int(time.time()), type=int)
+    parser.add_argument('--tool', dest='creation_tool', default='TorrentUtils', type=str)
+    parser.add_argument('--source', dest='source', type=str)
     parser.add_argument('--private', action='store_const', const=1)
     parser.add_argument('-y', '--yes', '--no-prompt', action='store_true', dest='no_prompt')
     parser.add_argument('--no-time-suffix', action='store_true', dest='no_time_suffix')
