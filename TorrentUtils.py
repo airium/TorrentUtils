@@ -29,7 +29,7 @@ class Torrent():
         self.torrent_name = '' # name
         self.n_bytes_piece_size = 0 # piece length
         self.content_sha1_hex_bytes = bytes() # pieces
-        self.private = 1 # private
+        self.private = 0 # private
         self.source = '' # source
 
 
