@@ -4,7 +4,7 @@
 
 ```txt
 python>=3.8
-bencoder
+bencoder (https://github.com/utdemir/bencoder)
 ```
 
 ## TODOs
