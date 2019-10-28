@@ -83,14 +83,6 @@ class Torrent():
         return torrent_dict
 
 
-    def updateMetadata(self, **metadata_dict):
-        for key, value in sorted(metadata_dict.items()):
-            # change piece size will reset sha1 hash
-            if key == 'n_bytes_piece_size' and value != self.n_bytes_piece_size:
-                self.content_sha1_hex_bytes = bytes()
-            setattr(self, key, value)
-
-
     @staticmethod
     def calSha1(b:bytes, /) -> str:
         sha1_hasher = hashlib.sha1()
@@ -103,6 +95,20 @@ class Torrent():
         sha1_hasher = hashlib.sha1()
         sha1_hasher.update(b)
         return bytes.fromhex(sha1_hasher.hexdigest())
+
+
+    def updateMetadata(self, **metadata_dict):
+        for key, value in sorted(metadata_dict.items()):
+            if key == 'n_bytes_piece_size':
+                # prompt if piece size not 2^n*16KiB or not in [256kiB, 32MiB]
+                if value % 262144 or not (262144 < value < 33554432):
+                    if 'y' != input(f'The piece size {value>>10} KiB is NOT common.\n'
+                                     'Confirm? (enter y to CONFIRM or anything else to cancel): '):
+                        print(f'Piece size {self.n_bytes_piece_size>>10} KiB not changed')
+                # change piece size will reset sha1 hash
+                if value != self.n_bytes_piece_size:
+                    self.content_sha1_hex_bytes = bytes()
+            setattr(self, key, value)
 
 
     def updateInfoDict(self):
