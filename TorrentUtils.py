@@ -72,6 +72,9 @@ class Torrent():
         if self.source:
             torrent_dict[b'info'][b'source'] = bytes(self.source, self.encoding)
 
+        # additional key for check purpose
+        torrent_dict[b'hash'] = bytes(self.calSha1(bencoder.encode(torrent_dict[b'info'])), self.encoding)
+
         return torrent_dict
 
 
@@ -81,6 +84,14 @@ class Torrent():
             if key == 'n_bytes_piece_size' and value != self.n_bytes_piece_size:
                 self.content_sha1_hex_bytes = bytes()
             setattr(self, key, value)
+
+
+    @staticmethod
+    def calSha1(b:bytes, /) -> str:
+        sha1_hasher = hashlib.sha1()
+        sha1_hasher.update(b)
+        return sha1_hasher.hexdigest()
+
 
     @staticmethod
     def calSha1Hex(b: bytes, /) -> bytes:
