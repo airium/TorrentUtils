@@ -7,6 +7,10 @@ import operator
 import bencoder
 
 
+NO_PROMPT = False
+NO_TIME_SUFFIX = False
+
+
 
 
 class Torrent():
@@ -102,7 +106,7 @@ class Torrent():
             if key == 'n_bytes_piece_size':
                 # prompt if piece size not 2^n*16KiB or not in [256kiB, 32MiB]
                 if value % 262144 or not (262144 < value < 33554432):
-                    if not no_prompt and \
+                    if not NO_PROMPT and \
                        'y' != input(f'The piece size {value>>10} KiB is NOT common.\n'
                                      'Confirm? (enter y to CONFIRM or anything else to cancel): '):
                         print(f'Piece size {self.n_bytes_piece_size>>10} KiB not changed')
@@ -131,12 +135,12 @@ class Torrent():
 
     def saveTorrent(self):
         assert self.content_fpath_list, 'There is no file given for the torrent'
-        fpath = self.torrent_fpath.with_suffix(f'{"" if no_time_suffix else "." + time.strftime("%y%m%d-%H%M%S")}.torrent')
+        fpath = self.torrent_fpath.with_suffix(f'{"" if NO_TIME_SUFFIX else "." + time.strftime("%y%m%d-%H%M%S")}.torrent')
         if not fpath.exists():
             fpath.write_bytes(bencoder.encode(self.torrent_dict))
             print(f'Torrent saved to {fpath}')
         elif fpath.is_file():
-            if no_prompt or \
+            if NO_PROMPT or \
                'y' == input(f'A file already exists at \'{self.torrent_fpath}\'\n'
                              'Overwrite? (enter y to OVERWRITE, or anything else to cancel): '):
                 fpath.unlink()
@@ -225,14 +229,13 @@ def _resolveArgs(args):
         return ret_metadata_dict
 
 
-    global no_prompt, no_time_suffix
-    no_prompt = True if args.no_prompt else False
-    no_time_suffix = True if args.no_time_suffix else False
+    global NO_PROMPT, NO_TIME_SUFFIX
+    NO_PROMPT = True if args.no_prompt else False
+    NO_TIME_SUFFIX = True if args.no_time_suffix else False
     ret_mode = args.mode if args.mode else __inferModeFromFpaths(args.fpaths)
     ret_fpaths = __sortFpaths(args.fpaths, ret_mode)
     ret_metadata_dict = __pickMetadata(args)
     return ret_mode, ret_fpaths, ret_metadata_dict
-
 
 
 
