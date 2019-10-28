@@ -133,9 +133,11 @@ class Torrent():
         fpath = self.torrent_fpath.with_suffix(f'{"" if no_time_suffix else "." + time.strftime("%Y%m%d-%H%M%S%z")}.torrent')
         if not fpath.exists():
             fpath.write_bytes(bencoder.encode(self.torrent_dict))
+            print(f'Torrent saved to {fpath}')
         elif fpath.is_file():
-            if no_prompt or input(f'A file already exists at \'{self.torrent_fpath}\'\n'
-                            'Overwrite? (enter y to OVERWRITE, or anything else to cancel): '):
+            if no_prompt or
+               'y' == input(f'A file already exists at \'{self.torrent_fpath}\'\n'
+                             'Overwrite? (enter y to OVERWRITE, or anything else to cancel): '):
                 fpath.unlink()
                 fpath.write_bytes(bencoder.encode(self.torrent_dict))
                 print(f'Torrent saved to {fpath} (overwritten)')
