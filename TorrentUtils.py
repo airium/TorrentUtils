@@ -102,7 +102,8 @@ class Torrent():
             if key == 'n_bytes_piece_size':
                 # prompt if piece size not 2^n*16KiB or not in [256kiB, 32MiB]
                 if value % 262144 or not (262144 < value < 33554432):
-                    if 'y' != input(f'The piece size {value>>10} KiB is NOT common.\n'
+                    if not no_prompt and \
+                       'y' != input(f'The piece size {value>>10} KiB is NOT common.\n'
                                      'Confirm? (enter y to CONFIRM or anything else to cancel): '):
                         print(f'Piece size {self.n_bytes_piece_size>>10} KiB not changed')
                 # change piece size will reset sha1 hash
@@ -135,7 +136,7 @@ class Torrent():
             fpath.write_bytes(bencoder.encode(self.torrent_dict))
             print(f'Torrent saved to {fpath}')
         elif fpath.is_file():
-            if no_prompt or
+            if no_prompt or \
                'y' == input(f'A file already exists at \'{self.torrent_fpath}\'\n'
                              'Overwrite? (enter y to OVERWRITE, or anything else to cancel): '):
                 fpath.unlink()
