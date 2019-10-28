@@ -113,7 +113,7 @@ class Torrent():
         for key, value in sorted(metadata_dict.items()):
             if key == 'n_bytes_piece_size':
                 # prompt if piece size not 2^n*16KiB or not in [256kiB, 32MiB]
-                if value % 262144 or not (262144 < value < 33554432):
+                if value % 262144 or not (262144 <= value <= 33554432):
                     if not NO_PROMPT and \
                        'y' != input(f'The piece size {value>>10} KiB is NOT common.\n'
                                      'Confirm? (enter y to CONFIRM or anything else to cancel): '):
@@ -154,14 +154,14 @@ class Torrent():
         fpath = self.torrent_fpath.with_suffix(f'{"" if NO_TIME_SUFFIX else "." + time.strftime("%y%m%d-%H%M%S")}.torrent')
         if not fpath.exists():
             fpath.write_bytes(bencoder.encode(self.torrent_dict))
-            print(f'Torrent saved to {fpath}')
+            print(f'Torrent saved to \'{fpath}\'')
         elif fpath.is_file():
             if NO_PROMPT or \
                'y' == input(f'A file already exists at \'{self.torrent_fpath}\'\n'
                              'Overwrite? (enter y to OVERWRITE, or anything else to cancel): '):
                 fpath.unlink()
                 fpath.write_bytes(bencoder.encode(self.torrent_dict))
-                print(f'Torrent saved to {fpath} (overwritten)')
+                print(f'Torrent saved to \'{fpath} (overwritten)\'')
             else:
                 print(f'Cancelled')
         if fpath.is_dir():
@@ -261,7 +261,7 @@ def main(args):
     torrent = Torrent(**fpaths_dict)
     if mode == 'create':
         torrent.updateMetadata(**metadata_dict)
-        print(f'Creating a new torrent from {torrent.content_fpath}')
+        print(f'Creating a new torrent from \'{torrent.content_fpath}\'')
         torrent.updateInfoDict()
         torrent.saveTorrent()
     elif mode == 'check':
