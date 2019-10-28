@@ -131,7 +131,7 @@ class Torrent():
 
     def saveTorrent(self):
         assert self.content_fpath_list, 'There is no file given for the torrent'
-        fpath = self.torrent_fpath.with_suffix(f'{"" if no_time_suffix else "." + time.strftime("%Y%m%d-%H%M%S%z")}.torrent')
+        fpath = self.torrent_fpath.with_suffix(f'{"" if no_time_suffix else "." + time.strftime("%y%m%d-%H%M%S")}.torrent')
         if not fpath.exists():
             fpath.write_bytes(bencoder.encode(self.torrent_dict))
             print(f'Torrent saved to {fpath}')
