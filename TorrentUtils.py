@@ -4,6 +4,7 @@ import pathlib
 import argparse
 import operator
 
+import tqdm
 import bencoder
 
 
@@ -40,6 +41,11 @@ class Torrent():
     @property
     def piece_size(self):
         return self.n_bytes_piece_size >> 10
+
+
+    @property
+    def torrent_size(self):
+        return sum(self.content_fsize_list)
 
 
     @property
@@ -122,15 +128,21 @@ class Torrent():
                  sorted(filter(operator.methodcaller('is_file'), self.content_fpath.rglob('*')))
         self.content_fpath_list = [fpath.relative_to(self.content_fpath) for fpath in fpaths]
         self.content_fsize_list = [fpath.stat().st_size for fpath in fpaths]
-        self.content_sha1_hex_bytes = piece_bytes = bytes()
-        for fpath in fpaths:
-            with open(fpath, 'rb') as fobj:
-                while (read_bytes := fobj.read(self.n_bytes_piece_size - len(piece_bytes))):
-                    piece_bytes += read_bytes
-                    if len(piece_bytes) == self.n_bytes_piece_size:
-                        self.content_sha1_hex_bytes += self.calSha1Hex(piece_bytes)
-                        piece_bytes = bytes()
-        self.content_sha1_hex_bytes += self.calSha1Hex(piece_bytes) if piece_bytes else b''
+        if self.torrent_size:
+            self.content_sha1_hex_bytes = piece_bytes = bytes()
+            pbar = tqdm.tqdm(total=self.torrent_size, unit='B', unit_scale=True)
+            for fpath in fpaths:
+                with open(fpath, 'rb') as fobj:
+                    while (read_bytes := fobj.read(self.n_bytes_piece_size - len(piece_bytes))):
+                        piece_bytes += read_bytes
+                        if len(piece_bytes) == self.n_bytes_piece_size:
+                            self.content_sha1_hex_bytes += self.calSha1Hex(piece_bytes)
+                            piece_bytes = bytes()
+                        pbar.update(len(read_bytes))
+            self.content_sha1_hex_bytes += self.calSha1Hex(piece_bytes) if piece_bytes else b''
+            pbar.close()
+        else:
+            print('No info dict was generated as the torrent size is 0')
 
 
     def saveTorrent(self):
