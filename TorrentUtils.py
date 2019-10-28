@@ -34,6 +34,11 @@ class Torrent():
 
 
     @property
+    def piece_size(self):
+        return self.n_bytes_piece_size >> 10
+
+
+    @property
     def torrent_dict(self):
         torrent_dict = {b'info':{}}
 
@@ -204,7 +209,7 @@ def _resolveArgs(args):
         if args.creation_tool: ret_metadata_dict['creation_tool'] = args.creation_tool
         if args.creation_time: ret_metadata_dict['creation_time'] = args.creation_time
         if args.encoding: ret_metadata_dict['encoding'] = args.encoding
-        if args.piece_size: ret_metadata_dict['n_bytes_piece_size'] = args.piece_size * 1024
+        if args.piece_size: ret_metadata_dict['n_bytes_piece_size'] = args.piece_size << 10
         if args.private: ret_metadata_dict['private'] = args.private
         if args.source: ret_metadata_dict['source'] = args.source
 
@@ -222,12 +227,13 @@ def _resolveArgs(args):
 
 
 
+
 def main(args):
     mode, fpaths_dict, metadata_dict = _resolveArgs(args)
     torrent = Torrent(**fpaths_dict)
     if mode == 'create':
-        print(f'Creating a new torrent from {torrent.content_fpath}')
         torrent.updateMetadata(**metadata_dict)
+        print(f'Creating a new torrent from {torrent.content_fpath}')
         torrent.updateInfoDict()
         torrent.saveTorrent()
     elif mode == 'check':
@@ -246,18 +252,47 @@ def main(args):
 
 
 
+class _CustomHelpFormatter(argparse.HelpFormatter):
+
+    def __init__(self, prog):
+        super().__init__(prog, max_help_position=50, width=100)
+
+    def _format_action_invocation(self, action):
+        if not action.option_strings or action.nargs == 0:
+            return super()._format_action_invocation(action)
+        default = self._get_default_metavar_for_optional(action)
+        args_string = self._format_args(action, default)
+        return ', '.join(action.option_strings) + ' ' + args_string
+
+
+
+
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('fpaths', nargs='+', type=pathlib.Path)
-    parser.add_argument('-m', '--mode', choices=('create', 'check', 'verify', 'modify'), default=None)
-    parser.add_argument('-t', '--tracker', action='extend', nargs='+', dest='tracker_list', type=str)
-    parser.add_argument('-s', '--piece-size', dest='piece_size', default=16384, type=int)
-    parser.add_argument('--encoding', dest='encoding', default='utf-8', type=str)
-    parser.add_argument('--comment', dest='comment', type=str)
-    parser.add_argument('--time', dest='creation_time', default=int(time.time()), type=int)
-    parser.add_argument('--tool', dest='creation_tool', default='TorrentUtils', type=str)
-    parser.add_argument('--source', dest='source', type=str)
-    parser.add_argument('--private', action='store_const', const=1)
-    parser.add_argument('-y', '--yes', '--no-prompt', action='store_true', dest='no_prompt')
-    parser.add_argument('--no-time-suffix', action='store_true', dest='no_time_suffix')
+    parser = argparse.ArgumentParser(prog='TorrentUtils',
+                                     formatter_class=lambda prog: _CustomHelpFormatter(prog))
+    parser.add_argument('fpaths', nargs='+', type=pathlib.Path,
+                        help='1 or 2 paths depending on mode', metavar='path')
+    parser.add_argument('-m', '--mode', choices=('create', 'check', 'verify', 'modify'), default=None,
+                        help='will be guessed from fpaths if not specified')
+    parser.add_argument('-t', '--tracker', action='extend', nargs='+', dest='tracker_list', type=str,
+                        help='can be specified multiple times', metavar='url')
+    parser.add_argument('-s', '--piece-size', dest='piece_size', default=16384, type=int,
+                        help='piece size in KiB (default: 16384KiB)', metavar='number')
+    parser.add_argument('-c', '--comment', dest='comment', type=str,
+                        help='the message displayed in various clients', metavar='text')
+    parser.add_argument('-p', '--private', choices={0,1}, type=int,
+                        help='private torrent if 1 (default: 0)')
+    parser.add_argument('--tool', dest='creation_tool', default='TorrentUtils', type=str,
+                        help='customise `created by` message (default: TorrentUtils)', metavar='text')
+    parser.add_argument('--time', dest='creation_time', default=int(time.time()), type=int,
+                        help='customise the second since 19700101 (default: now)', metavar='number')
+    parser.add_argument('--source', dest='source', type=str,
+                        help='customise `source` message (will change torrent hash)', metavar='text')
+    parser.add_argument('--encoding', dest='encoding', default='utf-8', type=str,
+                        help='customise encoding for filenames (default: utf-8)', metavar='text')
+    parser.add_argument('-y', '--yes', '--no-prompt', action='store_true', dest='no_prompt',
+                        help='don\'t prompt any interactive question')
+    parser.add_argument('--no-time-suffix', action='store_true', dest='no_time_suffix',
+                        help='don\'t add the current time in new torrent\'s name')
+    parser.add_argument('--version', action='version', version='%(prog)s 0.5')
     main(parser.parse_args())
