@@ -1,8 +1,10 @@
 import time
+import shutil
 import hashlib
 import pathlib
 import argparse
 import operator
+
 
 import tqdm
 import bencoder
@@ -131,8 +133,10 @@ class Torrent():
         if self.torrent_size:
             self.content_sha1_hex_bytes = piece_bytes = bytes()
             pbar = tqdm.tqdm(total=self.torrent_size, unit='B', unit_scale=True)
+            window_width = shutil.get_terminal_size()[0] // 2
             for fpath in fpaths:
                 with open(fpath, 'rb') as fobj:
+                    pbar.set_description(str(fpath)[-window_width:], refresh=True)
                     while (read_bytes := fobj.read(self.n_bytes_piece_size - len(piece_bytes))):
                         piece_bytes += read_bytes
                         if len(piece_bytes) == self.n_bytes_piece_size:
