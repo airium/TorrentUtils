@@ -1,11 +1,13 @@
+import re
 import time
 import shutil
+import string
 import hashlib
 import pathlib
 import argparse
 import operator
+import functools
 
-import bencoder
 
 try:
     import tqdm
@@ -17,6 +19,66 @@ else:
 
 NO_PROMPT = False
 NO_TIME_SUFFIX = False
+
+
+
+
+def encode(obj, encoding:str='utf-8') -> bytes:
+    tobj = type(obj)
+    if tobj is bytes:
+        ret = str(len(obj)).encode(encoding) + b":" + obj
+    elif tobj is str:
+        ret = encode(obj.encode(encoding))
+    elif tobj is int:
+        ret = b"i" + str(obj).encode(encoding) + b"e"
+    elif tobj in (list, tuple):
+        ret = b"l" + b"".join(map(functools.partial(encode, encoding=encoding), obj)) + b"e"
+    elif tobj is dict:
+        ret = b'd'
+        for key, val in sorted(obj.items()):
+            if type(key) in (bytes, str):
+                ret += encode(key, encoding) + encode(val, encoding)
+            else:
+                raise ValueError(f"Dict key must be str or bytes, not {key}:{type(key)}")
+        ret += b'e'
+    else:
+        raise ValueError(f'Input must be int, bytes, list or dict; not {obj}:{type(obj)}')
+    return ret
+
+
+
+
+def decode(s:(bytes, str), encoding='ascii'):
+    def decode_first(s):
+        if s.startswith(b"i"):
+            match = re.match(b"i(-?\\d+)e", s)
+            return int(match.group(1)), s[match.span()[1]:]
+        elif s.startswith(b"l") or s.startswith(b"d"):
+            l = []
+            rest = s[1:]
+            while not rest.startswith(b"e"):
+                elem, rest = decode_first(rest)
+                l.append(elem)
+            rest = rest[1:]
+            if s.startswith(b"l"):
+                return l, rest
+            else:
+                return {i: j for i, j in zip(l[::2], l[1::2])}, rest
+        elif any(s.startswith(i.encode(encoding)) for i in string.digits):
+            m = re.match(b"(\\d+):", s)
+            length = int(m.group(1))
+            rest_i = m.span()[1]
+            start = rest_i
+            end = rest_i + length
+            return s[start:end], s[end:]
+        else:
+            raise ValueError("Malformed input.")
+
+    s = s.encode(encoding) if isinstance(s, str) else s
+    ret, rest = decode_first(s)
+    if rest:
+        raise ValueError("Malformed input.")
+    return ret
 
 
 
@@ -95,7 +157,7 @@ class Torrent():
             torrent_dict[b'info'][b'source'] = bytes(self.source, self.encoding)
 
         # additional key for check purpose
-        torrent_dict[b'hash'] = bytes(self.calSha1(bencoder.encode(torrent_dict[b'info'])), self.encoding)
+        torrent_dict[b'hash'] = bytes(self.calSha1(encode(torrent_dict[b'info'])), self.encoding)
 
         return torrent_dict
 
@@ -158,14 +220,14 @@ class Torrent():
         assert self.content_fpath_list, 'There is no file given for the torrent'
         fpath = self.torrent_fpath.with_suffix(f'{"" if NO_TIME_SUFFIX else "." + time.strftime("%y%m%d-%H%M%S")}.torrent')
         if not fpath.exists():
-            fpath.write_bytes(bencoder.encode(self.torrent_dict))
+            fpath.write_bytes(encode(self.torrent_dict))
             print(f'Torrent saved to \'{fpath}\'')
         elif fpath.is_file():
             if NO_PROMPT or \
                'y' == input(f'A file already exists at \'{self.torrent_fpath}\'\n'
                              'Overwrite? (enter y to OVERWRITE, or anything else to cancel): '):
                 fpath.unlink()
-                fpath.write_bytes(bencoder.encode(self.torrent_dict))
+                fpath.write_bytes(encode(self.torrent_dict))
                 print(f'Torrent saved to \'{fpath} (overwritten)\'')
             else:
                 print(f'Cancelled')

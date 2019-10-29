@@ -4,7 +4,6 @@
 
 ```txt
 python>=3.8
-bencoder (https://github.com/utdemir/bencoder)
 ```
 
 ## Command line usage
@@ -57,3 +56,7 @@ GUI drag-drop usage:
 - [x] dropping a file/dir (non-torrent) will **create** a torrent
 - [ ] dropping a torrent will **check** torrent integrity
 - [ ] dropping a file/dir and a torrent will **verify** the file/dir from the torrent
+
+## Thanks to
+
+<https://github.com/utdemir/bencoder>
