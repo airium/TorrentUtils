@@ -60,3 +60,5 @@ GUI drag-drop usage:
 ## Thanks to
 
 <https://github.com/utdemir/bencoder>
+
+<https://stackoverflow.com/a/31124505>
