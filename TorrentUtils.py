@@ -137,7 +137,7 @@ class Torrent():
 
         # keys that impacts torrent hash
         if self.content_fpath_list:
-            if len(self.content_fpath_list) == 1:
+            if len(self.content_fpath_list) == 1 and not self.content_fpath_list[0].name:
                 torrent_dict[b'info'][b'length'] = self.content_fsize_list[0]
             else:
                 torrent_dict[b'info'][b'files'] = []
