@@ -5,9 +5,14 @@ import pathlib
 import argparse
 import operator
 
-
-import tqdm
 import bencoder
+
+try:
+    import tqdm
+except ImportError:
+    NO_PROGRESS = True
+else:
+    NO_PROGRESS = False
 
 
 NO_PROMPT = False
@@ -132,19 +137,19 @@ class Torrent():
         self.content_fsize_list = [fpath.stat().st_size for fpath in fpaths]
         if self.torrent_size:
             self.content_sha1_hex_bytes = piece_bytes = bytes()
-            pbar = tqdm.tqdm(total=self.torrent_size, unit='B', unit_scale=True)
+            if not NO_PROGRESS: pbar = tqdm.tqdm(total=self.torrent_size, unit='B', unit_scale=True)
             window_width = shutil.get_terminal_size()[0] // 2
             for fpath in fpaths:
                 with open(fpath, 'rb') as fobj:
-                    pbar.set_description(str(fpath)[-window_width:], refresh=True)
+                    if not NO_PROGRESS: pbar.set_description(str(fpath)[-window_width:], refresh=True)
                     while (read_bytes := fobj.read(self.n_bytes_piece_size - len(piece_bytes))):
                         piece_bytes += read_bytes
                         if len(piece_bytes) == self.n_bytes_piece_size:
                             self.content_sha1_hex_bytes += self.calSha1Hex(piece_bytes)
                             piece_bytes = bytes()
-                        pbar.update(len(read_bytes))
+                        if not NO_PROGRESS: pbar.update(len(read_bytes))
             self.content_sha1_hex_bytes += self.calSha1Hex(piece_bytes) if piece_bytes else b''
-            pbar.close()
+            if not NO_PROGRESS: pbar.close()
         else:
             print('No info dict was generated as the torrent size is 0')
 
@@ -245,9 +250,13 @@ def _resolveArgs(args):
         return ret_metadata_dict
 
 
-    global NO_PROMPT, NO_TIME_SUFFIX
+    global NO_PROMPT, NO_TIME_SUFFIX, NO_PROGRESS
     NO_PROMPT = True if args.no_prompt else False
     NO_TIME_SUFFIX = True if args.no_time_suffix else False
+    if NO_PROGRESS and not args.no_progress: # tqdm is not installed but want to use
+        print('I: \'tqdm\' is not installed so no progress bar will be shown')
+    else:
+        NO_PROGRESS = True if args.no_progress else False
     ret_mode = args.mode if args.mode else __inferModeFromFpaths(args.fpaths)
     ret_fpaths = __sortFpaths(args.fpaths, ret_mode)
     ret_metadata_dict = __pickMetadata(args)
@@ -322,5 +331,7 @@ if __name__ == '__main__':
                         help='don\'t prompt any interactive question')
     parser.add_argument('--no-time-suffix', action='store_true', dest='no_time_suffix',
                         help='don\'t add the current time in new torrent\'s name')
+    parser.add_argument('--no-progress', action='store_true', dest='no_progress',
+                        help='don\'t print any progress info')
     parser.add_argument('--version', action='version', version='%(prog)s 0.5')
     main(parser.parse_args())

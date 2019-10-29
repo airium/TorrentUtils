@@ -13,7 +13,7 @@ bencoder (https://github.com/utdemir/bencoder)
 $ python TorrentUtils.py -h
 usage: TorrentUtils [-h] [-m {create,check,verify,modify}] [-t url [url ...]] [-s number] [-c text]
                     [-p {0,1}] [--tool text] [--time number] [--source text] [--encoding text] [-y]
-                    [--no-time-suffix] [--version]
+                    [--no-time-suffix] [--no-progress] [--version]
                     path [path ...]
 
 positional arguments:
@@ -32,6 +32,7 @@ optional arguments:
   --encoding text                          customise encoding for filenames (default: utf-8)
   -y, --yes, --no-prompt                   don't prompt any interactive question
   --no-time-suffix                         don't add the current time in new torrent's name
+  --no-progress                            don't print any progress info
   --version                                show program's version number and exit
 ```
 
