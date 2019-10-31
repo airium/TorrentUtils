@@ -1,10 +1,5 @@
-import sys
-
-if sys.version_info < (3, 6):
-    print('Please use Python 3.6 or higher')
-    sys.exit(1)
-
 import re
+import sys
 import string
 import argparse
 from pathlib import Path
@@ -13,23 +8,28 @@ from itertools import chain
 from functools import partial
 
 
+if sys.version_info < (3, 8):
+    print('Please use Python 3.8 or higher')
+    sys.exit(1)
 
 
-def encode(obj, encoding:str='utf-8'):
+
+
+def _encode(obj, encoding='utf-8'):
     tobj = type(obj)
     if tobj is bytes:
         ret = str(len(obj)).encode(encoding) + b":" + obj
     elif tobj is str:
-        ret = encode(obj.encode(encoding))
+        ret = _encode(obj.encode(encoding))
     elif tobj is int:
         ret = b"i" + str(obj).encode(encoding) + b"e"
     elif tobj in (list, tuple):
-        ret = b"l" + b"".join(map(partial(encode, encoding=encoding), obj)) + b"e"
+        ret = b"l" + b"".join(map(partial(_encode, encoding=encoding), obj)) + b"e"
     elif tobj is dict:
         ret = b'd'
         for key, val in sorted(obj.items()):
             if type(key) in (bytes, str):
-                ret += encode(key, encoding) + encode(val, encoding)
+                ret += _encode(key, encoding) + _encode(val, encoding)
             else:
                 raise ValueError("Dict key must be str or bytes")
         ret += b'e'
@@ -40,7 +40,7 @@ def encode(obj, encoding:str='utf-8'):
 
 
 
-def decode(s, encoding='ascii'):
+def _decode(s, encoding='ascii'):
     def decode_first(s):
         if s.startswith(b"i"):
             match = re.match(b"i(-?\\d+)e", s)
@@ -79,7 +79,7 @@ def main(args):
     for fpath in filter(mc('match', '*.' + args.mode), filter(mc('is_file'), args.path + list(chain(*map(list, map(mc('rglob', '*'), args.path)))))):
         try:
 
-            data = decode(fpath.read_bytes())
+            data = _decode(fpath.read_bytes())
             if not isinstance(data, dict):
                 raise TypeError(f'Expect bencoded dict; not {type(data)}')
 
@@ -97,8 +97,6 @@ def main(args):
                 for i, tracker in enumerate(args.trackers_to_add):
                     trackers.insert(i, bytes(tracker, encoding))
                 data[b'trackers'] = list([tracker] for tracker in trackers)
-
-
 
             if args.mode == 'torrent':
                 trackers = ([data.get(b'announce')] if data.get(b'announce') else []) + list(chain(*data.get(b'announce-list', [])))
@@ -119,7 +117,8 @@ def main(args):
                 else:
                     data[b'announce'] = trackers[0]
                     data[b'announce-list'] = list([tracker] for tracker in trackers)
-            fpath.write_bytes(encode(data, encoding))
+
+            fpath.write_bytes(_encode(data, encoding))
 
         except Exception as err:
             print(f'\'{fpath.absolute()}\' : Skipped as {err.__class__.__name__} ({err})')
