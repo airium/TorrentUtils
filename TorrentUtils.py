@@ -81,40 +81,84 @@ def decode(s:(bytes, str), encoding='ascii'):
     return ret
 
 
+def calSha1(b:bytes) -> str:
+    sha1_hasher = hashlib.sha1()
+    sha1_hasher.update(b)
+    return sha1_hasher.hexdigest()
+
+
+def calSha1Hex(b: bytes) -> bytes:
+    return bytes.fromhex(calSha1(b))
 
 
 class Torrent():
 
 
     def __init__(self, torrent_fpath, content_fpath):
-        self.torrent_fpath = torrent_fpath
-        self.content_fpath = content_fpath
+        self._torrent_fpath = torrent_fpath
+        self._content_fpath = content_fpath
 
         # attributes not initialised in __init__
         # keys that not impacts torrent hash
-        self.tracker_list = [] # announce and announce-list
-        self.comment = '' # comment
-        self.creation_tool = ''# created by
-        self.creation_time = 0 # creation date
-        self.encoding = '' # encoding
+        self._tracker_list = [] # announce and announce-list
+        self._comment_str = '' # comment
+        self._creator_str = ''# created by
+        self._time_sec_int = 0 # creation date
+        self._encoding_str = '' # encoding
         # keys that impacts torrent hash
-        self.content_fpath_list = [] # files
-        self.content_fsize_list = [] # length
-        self.torrent_name = '' # name
-        self.n_bytes_piece_size = 0 # piece length
-        self.content_sha1_hex_bytes = bytes() # pieces
-        self.private = 0 # private
-        self.source = '' # source
+        self._fpath_list = [] # files
+        self._fsize_list = [] # length
+        self._torrent_name = '' # name
+        self._n_bytes_piece_size = 0 # piece length
+        self._content_sha1_str = '' # pieces
+        self._private_torrent = 0 # private
+        self._source_str = '' # source
 
 
     @property
-    def piece_size(self):
-        return self.n_bytes_piece_size >> 10
+    def announce(self):
+        return self._tracker_list[0]
+
+    @property
+    def announce_list(self):
+        return self._tracker_list
+
+    @property
+    def comment(self):
+        return self._comment_str
+
+    @property
+    def created_by(self):
+        return self._creator_str
+
+    @property
+    def creation_date(self):
+        return self._time_sec_int
+
+    @property
+    def encoding(self):
+        return self._encoding_str
+
+    @property
+    def name(self):
+        return self._torrent_name
+
+    @property
+    def piece_length(self):
+        return self._n_bytes_piece_size >> 10
+
+    @property
+    def private(self):
+        return self._private_torrent
+
+    @property
+    def pieces(self):
+        return bytes.fromhex(self._content_sha1_str)
 
 
     @property
     def torrent_size(self):
-        return sum(self.content_fsize_list)
+        return sum(self._fsize_list)
 
 
     @property
@@ -122,58 +166,44 @@ class Torrent():
         torrent_dict = {b'info':{}}
 
         # keys that not impacts torrent hash
-        if self.tracker_list:
-            torrent_dict[b'announce'] = bytes(self.tracker_list[0], self.encoding)
-        if self.tracker_list[1:]:
-            torrent_dict[b'announce-list'] = list(bytes(url, self.encoding) for url in self.tracker_list)
-        if self.comment:
-            torrent_dict[b'comment'] = bytes(self.comment, self.encoding)
-        if self.creation_time:
-            torrent_dict[b'creation data'] = self.creation_time
-        if self.creation_tool:
-            torrent_dict[b'created by'] = bytes(self.creation_tool, self.encoding)
-        if self.encoding:
-            torrent_dict[b'encoding'] = bytes(self.encoding, self.encoding)
+        if self._tracker_list:
+            torrent_dict[b'announce'] = bytes(self._tracker_list[0], self._encoding_str)
+        if self._tracker_list[1:]:
+            torrent_dict[b'announce-list'] = list([bytes(url, self._encoding_str)] for url in self._tracker_list)
+        if self._comment_str:
+            torrent_dict[b'comment'] = bytes(self._comment_str, self._encoding_str)
+        if self._time_sec_int:
+            torrent_dict[b'creation data'] = self._time_sec_int
+        if self._creator_str:
+            torrent_dict[b'created by'] = bytes(self._creator_str, self._encoding_str)
+        if self._encoding_str:
+            torrent_dict[b'encoding'] = bytes(self._encoding_str, self._encoding_str)
 
         # keys that impacts torrent hash
-        if self.content_fpath_list:
-            if len(self.content_fpath_list) == 1 and not self.content_fpath_list[0].name:
-                torrent_dict[b'info'][b'length'] = self.content_fsize_list[0]
+        if self._fpath_list:
+            if len(self._fpath_list) == 1 and not self._fpath_list[0].name:
+                torrent_dict[b'info'][b'length'] = self._fsize_list[0]
             else:
                 torrent_dict[b'info'][b'files'] = []
-                for fpath, fsize in zip(self.content_fpath_list, self.content_fsize_list):
+                for fpath, fsize in zip(self._fpath_list, self._fsize_list):
                     torrent_dict[b'info'][b'files'].append(
                         {b'length': fsize,
-                         b'path': list(bytes(part, self.encoding) for part in fpath.parts)})
-        if self.torrent_name:
-            torrent_dict[b'info'][b'name'] = bytes(self.torrent_name, self.encoding)
-        if self.n_bytes_piece_size:
-            torrent_dict[b'info'][b'piece length'] = self.n_bytes_piece_size
-        if self.content_sha1_hex_bytes:
-            torrent_dict[b'info'][b'pieces'] = self.content_sha1_hex_bytes
-        if self.private:
-            torrent_dict[b'info'][b'private'] = self.private
-        if self.source:
-            torrent_dict[b'info'][b'source'] = bytes(self.source, self.encoding)
+                         b'path': list(bytes(part, self._encoding_str) for part in fpath.parts)})
+        if self._torrent_name:
+            torrent_dict[b'info'][b'name'] = bytes(self._torrent_name, self._encoding_str)
+        if self._n_bytes_piece_size:
+            torrent_dict[b'info'][b'piece length'] = self._n_bytes_piece_size
+        if self._content_sha1_str:
+            torrent_dict[b'info'][b'pieces'] = self.pieces
+        if self._private_torrent:
+            torrent_dict[b'info'][b'private'] = self._private_torrent
+        if self._source_str:
+            torrent_dict[b'info'][b'source'] = bytes(self._source_str, self._encoding_str)
 
         # additional key for check purpose
-        torrent_dict[b'hash'] = bytes(self.calSha1(encode(torrent_dict[b'info'])), self.encoding)
+        torrent_dict[b'hash'] = bytes(calSha1(encode(torrent_dict[b'info'])), self._encoding_str)
 
         return torrent_dict
-
-
-    @staticmethod
-    def calSha1(b:bytes, /) -> str:
-        sha1_hasher = hashlib.sha1()
-        sha1_hasher.update(b)
-        return sha1_hasher.hexdigest()
-
-
-    @staticmethod
-    def calSha1Hex(b: bytes, /) -> bytes:
-        sha1_hasher = hashlib.sha1()
-        sha1_hasher.update(b)
-        return bytes.fromhex(sha1_hasher.hexdigest())
 
 
     def updateMetadata(self, **metadata_dict):
@@ -184,47 +214,49 @@ class Torrent():
                     if not NO_PROMPT and \
                        'y' != input(f'The piece size {value>>10} KiB is NOT common.\n'
                                      'Confirm? (enter y to CONFIRM or anything else to cancel): '):
-                        print(f'Piece size {self.n_bytes_piece_size>>10} KiB not changed')
+                        print(f'Piece size {self._n_bytes_piece_size>>10} KiB not changed')
                 # change piece size will reset sha1 hash
-                if value != self.n_bytes_piece_size:
-                    self.content_sha1_hex_bytes = bytes()
+                if value != self._n_bytes_piece_size:
+                    self._content_sha1_str = bytes()
+            print(key, value)
             setattr(self, key, value)
 
 
     def updateInfoDict(self):
-        self.torrent_name = self.content_fpath.name
-        fpaths = [self.content_fpath] if self.content_fpath.is_file() else \
-                 sorted(filter(operator.methodcaller('is_file'), self.content_fpath.rglob('*')))
-        self.content_fpath_list = [fpath.relative_to(self.content_fpath) for fpath in fpaths]
-        self.content_fsize_list = [fpath.stat().st_size for fpath in fpaths]
+        self._torrent_name = self._content_fpath.name
+        fpaths = [self._content_fpath] if self._content_fpath.is_file() else \
+                 sorted(filter(operator.methodcaller('is_file'), self._content_fpath.rglob('*')))
+        self._fpath_list = [fpath.relative_to(self._content_fpath) for fpath in fpaths]
+        self._fsize_list = [fpath.stat().st_size for fpath in fpaths]
         if self.torrent_size:
-            self.content_sha1_hex_bytes = piece_bytes = bytes()
+            self._content_sha1_str = str()
+            piece_bytes = bytes()
             if not NO_PROGRESS: pbar = tqdm.tqdm(total=self.torrent_size, unit='B', unit_scale=True)
             window_width = shutil.get_terminal_size()[0] // 2
             for fpath in fpaths:
                 with open(fpath, 'rb') as fobj:
                     if not NO_PROGRESS: pbar.set_description(str(fpath)[-window_width:], refresh=True)
-                    while (read_bytes := fobj.read(self.n_bytes_piece_size - len(piece_bytes))):
+                    while (read_bytes := fobj.read(self._n_bytes_piece_size - len(piece_bytes))):
                         piece_bytes += read_bytes
-                        if len(piece_bytes) == self.n_bytes_piece_size:
-                            self.content_sha1_hex_bytes += self.calSha1Hex(piece_bytes)
+                        if len(piece_bytes) == self._n_bytes_piece_size:
+                            self._content_sha1_str += calSha1(piece_bytes)
                             piece_bytes = bytes()
                         if not NO_PROGRESS: pbar.update(len(read_bytes))
-            self.content_sha1_hex_bytes += self.calSha1Hex(piece_bytes) if piece_bytes else b''
+            self._content_sha1_str += calSha1(piece_bytes) if piece_bytes else b''
             if not NO_PROGRESS: pbar.close()
         else:
             print('No info dict was generated as the torrent size is 0')
 
 
     def saveTorrent(self):
-        assert self.content_fpath_list, 'There is no file given for the torrent'
-        fpath = self.torrent_fpath.with_suffix(f'{"" if NO_TIME_SUFFIX else "." + time.strftime("%y%m%d-%H%M%S")}.torrent')
+        assert self._fpath_list, 'There is no file given for the torrent'
+        fpath = self._torrent_fpath.with_suffix(f'{"" if NO_TIME_SUFFIX else "." + time.strftime("%y%m%d-%H%M%S")}.torrent')
         if not fpath.exists():
             fpath.write_bytes(encode(self.torrent_dict))
             print(f'Torrent saved to \'{fpath}\'')
         elif fpath.is_file():
             if NO_PROMPT or \
-               'y' == input(f'A file already exists at \'{self.torrent_fpath}\'\n'
+               'y' == input(f'A file already exists at \'{self._torrent_fpath}\'\n'
                              'Overwrite? (enter y to OVERWRITE, or anything else to cancel): '):
                 fpath.unlink()
                 fpath.write_bytes(encode(self.torrent_dict))
@@ -300,14 +332,14 @@ def _resolveArgs(args):
     def __pickMetadata(args):
         ret_metadata_dict = dict()
 
-        if args.tracker_list: ret_metadata_dict['tracker_list'] = args.tracker_list
-        if args.comment: ret_metadata_dict['comment'] = args.comment
-        if args.creation_tool: ret_metadata_dict['creation_tool'] = args.creation_tool
-        if args.creation_time: ret_metadata_dict['creation_time'] = args.creation_time
-        if args.encoding: ret_metadata_dict['encoding'] = args.encoding
-        if args.piece_size: ret_metadata_dict['n_bytes_piece_size'] = args.piece_size << 10
-        if args.private: ret_metadata_dict['private'] = args.private
-        if args.source: ret_metadata_dict['source'] = args.source
+        if args.tracker_list: ret_metadata_dict['_tracker_list'] = args.tracker_list
+        if args.comment: ret_metadata_dict['_comment_str'] = args.comment
+        if args.creation_tool: ret_metadata_dict['_creator_str'] = args.creation_tool
+        if args.creation_time: ret_metadata_dict['_time_sec_int'] = args.creation_time
+        if args.encoding: ret_metadata_dict['_encoding_str'] = args.encoding
+        if args.piece_size: ret_metadata_dict['_n_bytes_piece_size'] = args.piece_size << 10
+        if args.private: ret_metadata_dict['_private_torrent'] = args.private
+        if args.source: ret_metadata_dict['_source'] = args.source
 
         return ret_metadata_dict
 
@@ -332,7 +364,7 @@ def main(args):
     torrent = Torrent(**fpaths_dict)
     if mode == 'create':
         torrent.updateMetadata(**metadata_dict)
-        print(f'Creating a new torrent from \'{torrent.content_fpath}\'')
+        print(f'Creating a new torrent from \'{torrent._content_fpath}\'')
         torrent.updateInfoDict()
         torrent.saveTorrent()
     elif mode == 'check':
