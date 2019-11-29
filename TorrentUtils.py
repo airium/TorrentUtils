@@ -1168,7 +1168,7 @@ def _main(args):
     elif mode == 'modify':
         torrent.loadTorrent(torrent_fpath)
         torrent.setMetadata(**metadata_dict)
-        torrent.saveTorrent(torrent_fpath, handle_existing='skip' if cli_cfg.with_time_suffix, with_time_suffix=cli_cfg.with_time_suffix)
+        torrent.saveTorrent(torrent_fpath, handle_existing='prompt' if cli_cfg.show_prompt else 'overwrite', with_time_suffix=cli_cfg.with_time_suffix)
     else:
         raise ValueError
 
@@ -1193,19 +1193,19 @@ class _CustomHelpFormatter(argparse.HelpFormatter):
 
 if __name__ == '__main__':
 
-    # assemble cli interface
     parser = argparse.ArgumentParser(prog='TorrentUtils', formatter_class=lambda prog: _CustomHelpFormatter(prog))
+
     parser.add_argument('fpaths', nargs='+', type=pathlib.Path,
                         help='1 or 2 paths depending on mode', metavar='path')
-    parser.add_argument('-m', '--mode', choices=('create', 'print', 'verify', 'modify'), default=None,
+    parser.add_argument('-m', '--mode', choices=('create', 'print', 'verify', 'modify'), default='',
                         help='will be guessed from fpaths if not specified')
     parser.add_argument('-t', '--tracker', action='extend', nargs='+', dest='tracker_list', type=str,
                         help='can be specified multiple times', metavar='url')
     parser.add_argument('-s', '--piece-size', dest='piece_size', default=16384, type=int,
-                        help='piece size in KiB (default: 16384KiB)', metavar='number')
+                        help='piece size in KiB (default: 16384)', metavar='number')
     parser.add_argument('-c', '--comment', dest='comment', type=str,
-                        help='the message _printlayed in various clients', metavar='text')
-    parser.add_argument('-p', '--private', choices={0,1}, type=int,
+                        help='the message displayed in various clients', metavar='text')
+    parser.add_argument('-p', '--private', choices={0, 1}, type=int,
                         help='private torrent if 1 (default: 0)')
     parser.add_argument('--tool', dest='creation_tool', default='TorrentUtils', type=str,
                         help='customise `created by` message (default: TorrentUtils)', metavar='text')
@@ -1213,14 +1213,14 @@ if __name__ == '__main__':
                         help='customise the second since 19700101 (default: now)', metavar='number')
     parser.add_argument('--source', dest='source', type=str,
                         help='customise `source` message (will change torrent hash)', metavar='text')
-    parser.add_argument('--encoding', dest='encoding', default='utf-8', type=str,
-                        help='customise encoding for filenames (default: utf-8)', metavar='text')
+    parser.add_argument('--encoding', dest='encoding', default='UTF-8', type=str,
+                        help='customise encoding for filenames (default: UTF-8)', metavar='text')
     parser.add_argument('-y', '--yes', '--no-prompt', action='store_false', dest='show_prompt',
-                        help='don\'t prompt any interactive question')
+                        help='don\'t prompt the user with any interactive question')
     parser.add_argument('--no-time-suffix', action='store_false', dest='with_time_suffix',
-                        help='don\'t add the current time in new torrent\'s name')
+                        help='don\'t include the current time in new torrent\'s name')
     parser.add_argument('--no-progress', action='store_false', dest='show_progress',
-                        help='don\'t print any progress info')
+                        help='don\'t display the progress bar in creating torrent')
     parser.add_argument('--version', action='version', version='%(prog)s 0.9')
 
     _main(parser.parse_args())
