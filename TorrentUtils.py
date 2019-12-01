@@ -1054,7 +1054,7 @@ class Torrent():
 
 
 '''=====================================================================================================================
-cli functions
+CLI functions
 ====================================================================================================================='''
 
 
@@ -1152,25 +1152,34 @@ def _resolveArgs(args):
 
 
 def _main(args):
-    mode, (torrent_fpath, content_fpath), metadata_dict, cli_cfg= _resolveArgs(args)
+    mode, (torrent_fpath, content_fpath), metadata, cfg = _resolveArgs(args)
     torrent = Torrent()
     if mode == 'create':
-        torrent.setMetadata(**metadata_dict)
-        print(f'Creating a new torrent from \'{torrent._content_fpath}\'')
+        print(f"Creating a new torrent")
+        print(f"Source: '{content_fpath}'")
         torrent.loadContent(content_fpath)
-        torrent.saveTorrent(torrent_fpath, with_time_suffix=cli_cfg.with_time_suffix)
+        torrent.setMetadata(**metadata)
+        torrent.saveTorrent(torrent_fpath, handle_existing='prompt' if cfg.show_prompt else 'overwrite',
+                        with_time_suffix=cfg.with_time_suffix)
     elif mode == 'print':
         torrent.loadTorrent(torrent_fpath)
         torrent.printTorrent()
     elif mode == 'verify':
+        print(f"Verifying torrent against files")
+        print(f"Torrent: '{torrent_fpath}'")
+        print(f"Files: '{content_fpath}'")
         torrent.loadTorrent(torrent_fpath)
         torrent.verifyContent(content_fpath)
     elif mode == 'modify':
+        print(f"Modifying torrent metadata")
         torrent.loadTorrent(torrent_fpath)
-        torrent.setMetadata(**metadata_dict)
-        torrent.saveTorrent(torrent_fpath, handle_existing='prompt' if cli_cfg.show_prompt else 'overwrite', with_time_suffix=cli_cfg.with_time_suffix)
+        torrent.setMetadata(**metadata)
+        torrent.saveTorrent(torrent_fpath, handle_existing='prompt' if cfg.show_prompt else 'overwrite',
+                            with_time_suffix=cfg.with_time_suffix)
     else:
-        raise ValueError
+        raise ValueError(f'Invalid mode: {mode}')
+
+
 
 
 '''=====================================================================================================================
