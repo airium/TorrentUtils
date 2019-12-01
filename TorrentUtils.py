@@ -109,9 +109,9 @@ def bdecode(s:(bytes, str), encoding='ascii'):
 
 def fromTorrent(path):
     '''wrapper function to create the torrent object from a torrent file'''
-    assert pathlib.Path(path).isfile(), f'Expect an existing file, but \'{path}\' not'
+    assert pathlib.Path(path).is_file(), f'Expect an existing file, but \'{path}\' not'
     torrent = Torrent()
-    torrent.loadTorrent(path)
+    torrent.read(path)
     return torrent
 
 
@@ -693,7 +693,7 @@ class Torrent():
                     raise ValueError('unknown key: {key}')
 
 
-    def loadTorrent(self, path, /):
+    def read(self, path, /):
         '''Load all information from the template. Note that this function will clear all existing keys.'''
         torrent_dict = bdecode(pathlib.Path(path).read_bytes())
 
@@ -742,8 +742,8 @@ class Torrent():
         self._source_str = source
 
 
-    def loadTorrentMetadata(self, path, /, include_key={}, exclude_key={'source'}):
-        '''Unlike `loadTorrent()`, this only load and overwrite torrent metadata:
+    def readMetadata(self, path, /, include_key={}, exclude_key={'source'}):
+        '''Unlike `read()`, this only load and overwrite torrent metadata:
             trackers, comment, created_by, creation_date, encoding, source
 
         Arguments:
@@ -765,7 +765,7 @@ class Torrent():
         assert include_key.issubset(key_set)
         assert include_key.issubset(key_set)
 
-        template.loadTorrent(path)
+        template.read(path)
         for key in include_key.difference(exclude_key):
             if key == 'tracker':
                 self._tracker_list.addTracker(template.trackers)
@@ -787,7 +787,7 @@ class Torrent():
                 continue
 
 
-    def loadContent(self, content_fpath, piece_size=0, preserve_name=False):
+    def load(self, content_fpath, piece_size=0, preserve_name=False):
         '''This member function refreshes the core info of a torrent: file list/size and piece hash.
         By default, it loads files from internal file path with internal piece size.
         Optionally, you can supply alternative file path and piece size, and choose whether to preserve torrent name.
@@ -841,7 +841,7 @@ class Torrent():
             print('Nothing was updated as the content size is 0.')
 
 
-    def saveTorrent(self, fpath, /, handle_existing='skip', with_time_suffix=True):
+    def write(self, fpath, /, handle_existing='skip', with_time_suffix=True):
         '''Save the torrent to a file
 
         Arguments:
@@ -1157,24 +1157,24 @@ def _main(args):
     if mode == 'create':
         print(f"Creating a new torrent")
         print(f"Source: '{content_fpath}'")
-        torrent.loadContent(content_fpath)
+        torrent.load(content_fpath)
         torrent.setMetadata(**metadata)
-        torrent.saveTorrent(torrent_fpath, handle_existing='prompt' if cfg.show_prompt else 'overwrite',
+        torrent.write(torrent_fpath, handle_existing='prompt' if cfg.show_prompt else 'overwrite',
                         with_time_suffix=cfg.with_time_suffix)
     elif mode == 'print':
-        torrent.loadTorrent(torrent_fpath)
+        torrent.read(torrent_fpath)
         torrent.printTorrent()
     elif mode == 'verify':
         print(f"Verifying torrent against files")
         print(f"Torrent: '{torrent_fpath}'")
         print(f"Files: '{content_fpath}'")
-        torrent.loadTorrent(torrent_fpath)
+        torrent.read(torrent_fpath)
         torrent.verifyContent(content_fpath)
     elif mode == 'modify':
         print(f"Modifying torrent metadata")
-        torrent.loadTorrent(torrent_fpath)
+        torrent.read(torrent_fpath)
         torrent.setMetadata(**metadata)
-        torrent.saveTorrent(torrent_fpath, handle_existing='prompt' if cfg.show_prompt else 'overwrite',
+        torrent.write(torrent_fpath, handle_existing='prompt' if cfg.show_prompt else 'overwrite',
                             with_time_suffix=cfg.with_time_suffix)
     else:
         raise ValueError(f'Invalid mode: {mode}')
