@@ -7,6 +7,7 @@ import shutil
 import string
 import hashlib
 import pathlib
+import warnings
 import argparse
 import operator
 import itertools
@@ -210,7 +211,7 @@ class Torrent():
 
     def __init__(self, **kwargs):
         '''The function basically creates the instance of an empty torrent.
-        Optionally, you can supply arbitrary arguments supported by `self.setMetadata()` to initialise some metadata.
+        Optionally, you can supply arbitrary arguments supported by `self.set()` to initialise some metadata.
 
         Currently, this class only supports most regular torrent file specifications.
         The first level in a torrent's dict can have the following keys:
@@ -234,7 +235,7 @@ class Torrent():
         self._source_str = ''                       # for `source`
 
         # allow partial metadata initialisation
-        self.setMetadata(**kwargs)
+        self.set(**kwargs)
 
 
     '''-----------------------------------------------------------------------------------------------------------------
@@ -603,15 +604,17 @@ class Torrent():
             else: # raise error when used as lib
                 raise ValueError('piece size must be larger than 16KiB')
 
-        if ((math.log2(size % 262144) % 1) or (size < 262144) or (size > 33554432)) and INTERACTIVE:
+        if (math.log2(size / 262144) % 1) or (size < 262144) or (size > 33554432) and INTERACTIVE:
             if 'y' != _input(f'The piece size {size >> 10} KiB is UNCOMMON.\n'
                             'Confirm? (enter y to CONFIRM or anything else to cancel): '):
                 _print(f'Piece size not changed, still {self._piece_size_int>>10} KiB')
                 return None
 
         if size != self._piece_size_int:
+            if self._content_sha1.hex:
+                print('Piece hash cleared')
             self._content_sha1.clear() # changing piece size will clear existing hash
-            _print('Piece hash cleared')
+
 
         self._piece_size_int = size
 
@@ -646,7 +649,7 @@ class Torrent():
         self.setSource(src)
 
 
-    def setMetadata(self, **metadata):
+    def set(self, **metadata):
         '''This function allows setting metadata with more flexible key aliases:
 
             tracker: t, tr, tracker, trackers, trackerlist, announce, announces, announcelist
@@ -1002,7 +1005,7 @@ class Torrent():
         return self.whichFileB(st * self.piece_length, ed * self.piece_length)
 
 
-    def verifyContent(self, dest):
+    def verify(self, dest):
         '''Verify if the actual files match existing hash list
 
         Argument:
@@ -1047,7 +1050,7 @@ class Torrent():
         return piece_error_list
 
 
-    def printTorrent(self):
+    def print(self):
         raise NotImplementedError
 
 
@@ -1061,121 +1064,191 @@ CLI functions
 def _resolveArgs(args):
 
 
-    def __inferModeFromFpaths(fpaths):
-        ret_mode = None
+    def __inferMode(fpaths):
+        '''Inferring working mode from the number of paths is limited: some modes cannot be inferred'''
+        ret = None
 
         if len(fpaths) == 1 and fpaths[0].is_dir():
-            ret_mode = 'create'
-        if len(fpaths) == 1 and fpaths[0].is_file() and fpaths[0].suffix.lower() != '.torrent':
-            ret_mode = 'create'
-        if len(fpaths) == 1 and fpaths[0].is_file() and fpaths[0].suffix.lower() == '.torrent':
-            ret_mode = 'print'
-        if len(fpaths) == 2 and fpaths[0].is_file() and fpaths[0].suffix.lower() == '.torrent':
-            ret_mode = 'verify'
-        if len(fpaths) == 2 and fpaths[1].is_file() and fpaths[1].suffix.lower() == '.torrent':
-            ret_mode = 'verify'
+            ret = 'create'
+        elif len(fpaths) == 1 and fpaths[0].is_file() and fpaths[0].suffix.lower() != '.torrent':
+            ret = 'create'
+        elif len(fpaths) == 1 and fpaths[0].is_file() and fpaths[0].suffix.lower() == '.torrent':
+            ret = 'print'
+        elif len(fpaths) == 2 and fpaths[0].is_file() and fpaths[0].suffix.lower() == '.torrent':
+            ret = 'verify'
+        elif len(fpaths) == 2 and fpaths[1].is_file() and fpaths[1].suffix.lower() == '.torrent':
+            ret = 'verify'
+        else:
+            raise ValueError('Failed to infer working mode')
 
-        if ret_mode:
-            return ret_mode
-        raise ValueError('Failed to infer action mode')
-
-
-    def __sortFpaths(fpaths, mode):
-        torrent_fpath = None
-        content_fpath = None
-
-        if mode == 'create' and len(fpaths) == 1:
-            torrent_fpath = fpaths[0].parent.joinpath(fpaths[0].name + '.torrent')
-            content_fpath = fpaths[0]
-        if mode == 'create' and len(fpaths) == 2 and fpaths[1].is_dir():
-            torrent_fpath = fpaths[1].parent.joinpath(fpaths[1].name + '.torrent')
-            content_fpath = fpaths[0]
-        if mode == 'create' and len(fpaths) == 2 and fpaths[1].is_file():
-            torrent_fpath = fpaths[1]
-            content_fpath = fpaths[0]
-        if mode == 'print' and len(fpaths) == 1 and fpaths[0].is_file():
-            torrent_fpath = fpaths[0]
-        if mode == 'verify' and len(fpaths) == 2 and fpaths[1].is_file():
-            torrent_fpath = fpaths[1]
-            content_fpath = fpaths[0]
-        if mode == 'modfiy' and len(fpaths) == 1 and fpaths[0].is_file():
-            torrent_fpath = fpaths[0]
-
-        if torrent_fpath:
-            return torrent_fpath, content_fpath
-        raise ValueError
+        return ret
 
 
-    def __pickMetadata(args):
-        ret_metadata_dict = dict()
+    def __sortPath(fpaths, mode):
+        '''Based on the working mode, sort out the most proper paths for torrent and content.'''
+        content_fpath = torrent_fpath = None
 
-        if args.tracker_list: ret_metadata_dict['_tracker_list'] = args.tracker_list
-        if args.comment: ret_metadata_dict['_comment_str'] = args.comment
-        if args.creation_tool: ret_metadata_dict['_creator_str'] = args.creation_tool
-        if args.creation_time: ret_metadata_dict['_datesec_int'] = args.creation_time
-        if args.encoding: ret_metadata_dict['_encoding_str'] = args.encoding
-        if args.piece_size: ret_metadata_dict['_piece_size_int'] = args.piece_size << 10
-        if args.private: ret_metadata_dict['_private_int'] = args.private
-        if args.source: ret_metadata_dict['_source'] = args.source
+        # `create` mode requires 1 or 2 paths
+        # the first path of non-torrent file/dir will be selected as the content path
+        # if both are torrent files, the first path is selected as the content path
+        # the other path is the optional torrent path to save to
+        # if the torrent path is not specified, the torrent is saved along with the content path
+        if mode == 'create':
+            if len(fpaths) == 1: # only 1 path, which must be the content path
+                if fpaths[0].is_file() and fpaths[0].name == '.torrent':
+                    print('W: Torrent is being created from a torrent, which is generally not expected.')
+                content_fpath = fpaths[0]
+                torrent_fpath = content_fpath.parent.joinpath(content_fpath.name + '.torrent')
+            elif len(fpaths) == 2:
+                # path 0 is a non-torrent file/dir
+                if fpaths[0].is_dir() or (paths[0].is_file() and paths[0].suffix != '.torrent'):
+                    content_fpath = fpaths[0]
+                    torrent_fpath = fpaths[1].with_suffix('.torrent') if fpaths[1].is_file() else \
+                                    fpaths[1].joinpath(content_fpath.name + '.torrent')
+                # path 1 is a non-torrent file/dir
+                elif fpaths[1].is_dir() or (paths[1].is_file() and paths[1].suffix != '.torrent'):
+                    content_fpath = fpaths[1]
+                    torrent_fpath = fpaths[0].with_suffix('.torrent') if fpaths[0].is_file() else \
+                                    fpaths[0].joinpath(content_fpath.name + '.torrent')
+                # both are torrent files
+                else:
+                    print('W: You are creating from a torrent, which is generally not expected.')
+                    content_fpath = fpaths[0]
+                    torrent_fpath = fpaths[1].with_suffix('.torrent') if fpaths[1].is_file() else \
+                                    fpaths[1].joinpath(content_fpath.name + '.torrent')
+            else:
+                raise ValueError(f'`create` mode expects 1 or 2 paths, not {len(fpaths)}')
 
-        return ret_metadata_dict
+        # `print` mode requires exactly 1 path, which must be a torrent file
+        elif mode == 'print':
+            if len(fpaths) == 1:
+                if fpaths[0].is_file() and fpaths[0].suffix == '.torrent':
+                    torrent_fpath = fpaths[0]
+                else:
+                    raise ValueError(f'`print` mode expects a torrent path, not {fpaths[0]}')
+            else:
+                raise ValueError(f'`print` mode expects exactly 1 paths, not {len(fpaths)}')
+
+        # `verify` mode requires exactly 2 paths
+        # the first path of a torrent file is selected as the torrent file
+        # the other path is left as the content path
+        elif mode == 'verify':
+            if len(fpaths) == 2:
+                if fpaths[0].is_file() and fpaths[0].suffix == '.torrent':
+                    torrent_fpath = fpaths[0]
+                    content_fpath = fpaths[1]
+                elif fpaths[1].is_file() and fpaths[1].suffix == '.torrent':
+                    torrent_fpath = fpaths[1]
+                    content_fpath = fpaths[0]
+                else:
+                    raise ValueError(f'`verify` mode expects a torrent path, but not found')
+            else:
+                raise ValueError(f'`verify` mode expects exactly 2 paths, not {len(fpaths)}')
+
+        # `modify` mode requires 1 or 2 paths
+        # the first path is always the torrent file to load from
+        # the second path is an optional alternative path to save the manipulated torrent
+        # `content_fpath` is the torrent to load from, `torrent_fpath` is the path to save to
+        elif mode == 'modify':
+            if len(fpaths) == 1:
+                if fpaths[0].is_file() and fpaths[0].suffix == '.torrent':
+                    content_fpath = fpaths[0]
+                    torrent_fpath = content_fpath.parent.joinpath(content_fpath.name + '.torrent')
+                else:
+                    raise ValueError(f'`modify` mode expects a torrent path, not {fpaths[0]}')
+            elif len(fpaths) == 2:
+                if fpaths[0].is_file() and fpaths[0].suffix == '.torrent':
+                    content_fpath = fpath[0]
+                    torrent_fpath = fpaths[1].with_suffix('.torrent') if fpaths[1].is_file() else \
+                                    fpaths[1].joinpath(content_fpath.name + '.torrent')
+                else:
+                    raise ValueError(f'`modify` mode expects a torrent path, but not found')
+            else:
+                raise ValueError(f'`modify` mode expects exactly 1 or 2 paths, not {len(fpaths)}')
+
+        else:
+            raise ValueError('Failed to sort paths for torrent and content')
+
+        return torrent_fpath, content_fpath
 
 
-    def __parseCliCfg(args):
-        ret_cli_cfg_dict = dict()
+    def __pickMetadata(args, mode):
+        metadata = dict()
 
-        # we are now in cli usage scenario
-        global INTERACTIVE, SHOW_PROMPT
-        INTERACTIVE = True
-        SHOW_PROMPT = True
+        if mode in ('create', 'modify'):
+            if args.tracker_list: metadata['tracker_list'] = args.tracker_list
+            if args.comment: metadata['comment'] = args.comment
+            if args.creation_tool: metadata['creator'] = args.creation_tool
+            if args.creation_time: metadata['date'] = args.creation_time
+            if args.encoding: metadata['encoding'] = args.encoding
+            if args.piece_size: metadata['piece_size'] = args.piece_size << 10 # cli input is in KiB, we need Bytes
+            if args.private: metadata['private'] = args.private
+            if args.source: metadata['source'] = args.source
+        else:
+            print(f'W: Supplied metadata was ignored in `{mode}` mode')
 
-        ret_cli_cfg_dict['with_time_suffix'] = args.with_time_suffix
+        return metadata
+
+
+    def __pickCliCfg(args):
+        cfg = dict()
+
+        cfg['show_prompt'] = args.show_prompt
+        cfg['with_time_suffix'] = args.with_time_suffix
         try:
             import tqdm
         except ImportError:
-            print('Progress bar won\'t show as it\'s not installed, consider `pip3.8 install tqdm`.')
-            ret_cli_cfg_dict['show_progress'] = False # tqdm is not installed, so don't use progress bar
+            if cfg['show_prompt']:
+                print('I: Progress bar won\'t show as it\'s not installed, consider `pip3.8 install tqdm`.')
+            cfg['show_progress'] = False # tqdm is not installed, so don't use progress bar
         else:
-            ret_cli_cfg_dict['show_progress'] = args.show_progress # it's still controlled by `INTERACTIVE`
-        SHOW_PROMPT = args.show_prompt
-        ret_cli_cfg_dict['show_prompt'] = args.show_prompt
-        ret_cli_cfg_dict['with_time_suffix'] = args.with_time_suffix
+            cfg['show_progress'] = args.show_progress # it's still controlled by `INTERACTIVE`
+
+        return cfg
 
 
-    ret_mode = args.mode if args.mode else __inferModeFromFpaths(args.fpaths)
-    ret_fpaths = __sortFpaths(args.fpaths, ret_mode)
-    ret_metadata_dict = __pickMetadata(args)
-    ret_cli_cfg_dict = __parseCliCfg(args)
-    return ret_mode, ret_fpaths, ret_metadata_dict, ret_cli_cfg_dict
+    # if mode is not specified, infer it from the number of supplied paths
+    mode = args.mode if args.mode else __inferMode(args.fpaths)
+    # based on the working mode, pick the most likely torrent and content paths
+    torrent_fpath, content_fpath = __sortPath(args.fpaths, mode)
+    # extract metadata from cli arguments
+    metadata = __pickMetadata(args, mode)
+    # extract cli config from cli arguments
+    cfg = __pickCliCfg(args)
+
+    # we are now in cli usage scenario
+    global INTERACTIVE, SHOW_PROMPT
+    INTERACTIVE = True
+    SHOW_PROMPT = cfg['show_prompt']
+
+    return mode, torrent_fpath, content_fpath, metadata, cfg
 
 
 
 
 def _main(args):
-    mode, (torrent_fpath, content_fpath), metadata, cfg = _resolveArgs(args)
+    mode, torrent_fpath, content_fpath, metadata, cfg = _resolveArgs(args)
     torrent = Torrent()
     if mode == 'create':
         print(f"Creating a new torrent")
-        print(f"Source: '{content_fpath}'")
+        print(f"S: '{content_fpath}'")
         torrent.load(content_fpath)
-        torrent.setMetadata(**metadata)
-        torrent.write(torrent_fpath, handle_existing='prompt' if cfg.show_prompt else 'overwrite',
-                        with_time_suffix=cfg.with_time_suffix)
+        torrent.set(**metadata)
+        torrent.write(torrent_fpath, 'prompt' if cfg.show_prompt else 'overwrite', cfg.with_time_suffix)
     elif mode == 'print':
         torrent.read(torrent_fpath)
-        torrent.printTorrent()
+        torrent.print()
     elif mode == 'verify':
         print(f"Verifying torrent against files")
-        print(f"Torrent: '{torrent_fpath}'")
-        print(f"Files: '{content_fpath}'")
+        print(f"T: '{torrent_fpath}'")
+        print(f"F: '{content_fpath}'")
         torrent.read(torrent_fpath)
-        torrent.verifyContent(content_fpath)
+        torrent.verify(content_fpath)
     elif mode == 'modify':
         print(f"Modifying torrent metadata")
-        torrent.read(torrent_fpath)
-        torrent.setMetadata(**metadata)
-        torrent.write(torrent_fpath, handle_existing='prompt' if cfg.show_prompt else 'overwrite',
-                            with_time_suffix=cfg.with_time_suffix)
+        torrent.read(content_fpath)
+        torrent.set(**metadata)
+        torrent.write(torrent_fpath, 'prompt' if cfg.show_prompt else 'overwrite', cfg.with_time_suffix)
     else:
         raise ValueError(f'Invalid mode: {mode}')
 
@@ -1207,7 +1280,7 @@ if __name__ == '__main__':
     parser.add_argument('fpaths', nargs='+', type=pathlib.Path,
                         help='1 or 2 paths depending on mode', metavar='path')
     parser.add_argument('-m', '--mode', choices=('create', 'print', 'verify', 'modify'), default='',
-                        help='will be guessed from fpaths if not specified')
+                        help='will be guessed from paths if not specified')
     parser.add_argument('-t', '--tracker', action='extend', nargs='+', dest='tracker_list', type=str,
                         help='can be specified multiple times', metavar='url')
     parser.add_argument('-s', '--piece-size', dest='piece_size', default=16384, type=int,
