@@ -225,11 +225,11 @@ class Torrent():
         self._comment_str = ''                      # for `comment`
         self._creator_str = ''                      # for `created by`
         self._datesec_int = 0                       # for `creation date`
-        self._encoding_str = ''                     # for `encoding`
+        self._encoding_str = 'UTF-8'                # for `encoding`
         self._content_fpath_list = []               # for `files`
         self._content_fsize_list = []               # for `length`
         self._torrent_name_str = ''                 # for `name`
-        self._piece_size_int = 0                    # for `piece length`
+        self._piece_size_int = 4096 << 10           # for `piece length`
         self._content_sha1 = Sha1()                 # for `pieces`
         self._private_int = 0                       # for `private`
         self._source_str = ''                       # for `source`
@@ -1283,7 +1283,7 @@ if __name__ == '__main__':
                         help='will be guessed from paths if not specified')
     parser.add_argument('-t', '--tracker', action='extend', nargs='+', dest='tracker_list', type=str,
                         help='can be specified multiple times', metavar='url')
-    parser.add_argument('-s', '--piece-size', dest='piece_size', default=16384, type=int,
+    parser.add_argument('-s', '--piece-size', dest='piece_size', default=4096, type=int,
                         help='piece size in KiB (default: 16384)', metavar='number')
     parser.add_argument('-c', '--comment', dest='comment', type=str,
                         help='the message displayed in various clients', metavar='text')
