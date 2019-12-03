@@ -1051,7 +1051,37 @@ class Torrent():
 
 
     def print(self):
-        raise NotImplementedError
+
+        tname = self.name
+        tsize = f'{self.torrent_size:,} Bytes'
+        tencd = self.encoding
+        thash = self.hash
+        fsize = f'{self.content_size:,} Bytes'
+        fnum = f'{len(self.file_list)} File' + 's' if len(self.file_list) > 1 else ''
+        psize = self.piece_length >> 10
+        pnum = self.num_pieces
+        tdate = time.strftime('%Y/%m/%d %H:%M:%S', time.localtime(self.creation_date)) if self.creation_date \
+                else '----/--/-- --:--:--'
+        tfrom = self.created_by if self.created_by else '------------'
+        tpriv = 'Private' if self.private else 'Public'
+        tsour = f'from {self.source}' if self.source else ''
+        tcomm = self.comment
+
+        width = shutil.get_terminal_size()[0]
+
+        print(f'Info ' + '-' * (width - 6))
+        print(f"Name: {tname}")
+        print(f"File: {tsize}, {tencd}")
+        print(f"Hash: {thash}")
+        print(f"Size: {fsize}, {fnum}, {psize} KiB x {pnum} Pieces")
+        print(f"Time: {tdate} by {tfrom}")
+        print(f"Else: {tpriv} torrent {tsour}")
+        for i in range(0, math.ceil(len(tcomm) / width)):
+            print(f"Comm: {tcomm[i * width : (i + 1) * width]} ")
+        print(f'Tracker ' + '-' * (width - 9))
+        for i, url in enumerate(self.tracker_list):
+            print(eval("f'{i:0" + str(len(self.tracker_list) // 10 + 1) + "}: {url}'"))
+        # TODO: add the tree-view of files
 
 
 
@@ -1184,8 +1214,8 @@ def _resolveArgs(args):
             if args.piece_size: metadata['piece_size'] = args.piece_size << 10 # cli input is in KiB, we need Bytes
             if args.private: metadata['private'] = args.private
             if args.source: metadata['source'] = args.source
-        else:
-            print(f'W: Supplied metadata was ignored in `{mode}` mode')
+        # else:
+        #     print(f'W: Supplied metadata was ignored in `{mode}` mode')
 
         return metadata
 
