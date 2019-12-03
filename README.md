@@ -40,25 +40,25 @@ optional arguments:
 
 ## TODOs
 
-Core:
+### Core
 
+- [x] **print** torrent information
 - [x] **create** new torrent
-- [ ] **print** torrent information
 - [x] **verify** files against a torrent
 - [x] support various torrent **metadata**
 
-Command line usage:
+### CLI
 
-- [x] **create** a torrent from a file/dir
-- [ ] **print** torrent integrity
-- [x] **verify** file integrity from a torrent
-- [x] **modify** torrent metadata e.g. trackers
+- [x] **print** mode to display torrent information
+- [x] **create** mode to create a torrent with
+- [x] **modify** mode to edit torrent metadata
+- [x] **verify** mode to check file integrity against the torrent
 
-GUI drag-drop usage:
+### GUI Drag-Drop (inherit CLI)
 
-- [x] dropping a file/dir (non-torrent) will **create** a torrent
-- [ ] dropping a torrent will **print** torrent information
-- [x] dropping a file/dir and a torrent will **verify** the file/dir from the torrent
+- [x] **print** torrent information by dropping a single torrent file
+- [x] **create** a torrent by dropping a single non-torrent file/dir
+- [x] **verify** files against a torrent by dropping a file/dir and a torrent
 
 ## Thanks to
 
