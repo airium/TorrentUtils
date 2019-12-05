@@ -429,9 +429,9 @@ class Torrent():
         return ret
 
 
-    '''---------------------------------------------------------------------------------------------
+    '''-----------------------------------------------------------------------------------------------------------------
     Public member functions for manipulation, providing basic operations
-    ---------------------------------------------------------------------------------------------'''
+    -----------------------------------------------------------------------------------------------------------------'''
 
 
     def addTracker(self, urls, /, top=True):
@@ -790,7 +790,7 @@ class Torrent():
                 continue
 
 
-    def load(self, content_fpath, piece_size=0, preserve_name=False):
+    def load(self, cpath, preserve_name=False, show_progress=False):
         '''This member function refreshes the core info of a torrent: file list/size and piece hash.
         By default, it loads files from internal file path with internal piece size.
         Optionally, you can supply alternative file path and piece size, and choose whether to preserve torrent name.
@@ -802,46 +802,50 @@ class Torrent():
             self.piece_length
             self.pieces
         '''
-        # first handle arguments
-        assert type(content_fpath) in (pathlib.Path, str)
-        assert type(piece_size) in (int,)
-        assert type(preserve_name) in (bool,)
-        content_fpath = pathlib.Path(content_fpath)
-        piece_size = piece_size if piece_size else self._piece_size_int
-        self._chkParams(content_fpath_to_load=content_fpath, piece_size=piece_size)
+        cpath = pathlib.Path(cpath)
+        preserve_name = bool(preserve_name)
 
-        # try update
-        fpaths = [content_fpath] if content_fpath.is_file() else \
-                 sorted(filter(operator.methodcaller('is_file'), content_fpath.rglob('*')))
-        fpath_list = [fpath.relative_to(content_fpath) for fpath in fpaths]
+        fpaths = [cpath] if cpath.is_file() else sorted(filter(operator.methodcaller('is_file'), cpath.rglob('*')))
+        fpath_list = [fpath.relative_to(cpath) for fpath in fpaths]
         fsize_list = [fpath.stat().st_size for fpath in fpaths]
         if sum(fsize_list):
-            sha1_str = str()
-            piece_bytes = bytes()
-            if SHOW_PROGRESS: pbar = tqdm.tqdm(total=sum(fsize_list), unit='B', unit_scale=True)
-            desc_width = shutil.get_terminal_size()[0] // 3
-            for fpath in fpaths:
-                fobj = fpath.open('rb')
-                if SHOW_PROGRESS: pbar.set_description(str(fpath)[-desc_width:], refresh=True)
-                while (read_bytes := fobj.read(piece_size - len(piece_bytes))):
-                    piece_bytes += read_bytes
-                    if len(piece_bytes) == piece_size:
-                        sha1_str += Sha1.hash(piece_bytes)
-                        piece_bytes = bytes()
-                    if SHOW_PROGRESS: pbar.update(len(read_bytes))
-                fobj.close()
-            sha1_str += Sha1.hash(piece_bytes) if piece_bytes else b''
-            if SHOW_PROGRESS: pbar.close()
-
-            # Everything looks good, let's update internal parameters
-            self._torrent_name_str = self.name if preserve_name else content_fpath.name
-            self._piece_size_int = piece_size
-            self._content_fpath_list = fpath_list
-            self._content_fsize_list = fsize_list
-            self._content_sha1 = Sha1(sha1_str)
-
+            if show_progress:
+                sha1_str = str()
+                piece_bytes = bytes()
+                pbar = tqdm.tqdm(total=sum(fsize_list), unit='B', unit_scale=True)
+                # terminal_width = shutil.get_terminal_size()[0] // 3
+                for fpath in fpaths:
+                    # pbar.set_description(str(fpath)[-terminal_width:], refresh=True)
+                    with fpath.open('rb') as fobj:
+                        while (read_bytes := fobj.read(self.piece_length - len(piece_bytes))):
+                            piece_bytes += read_bytes
+                            if len(piece_bytes) == self.piece_length:
+                                sha1_str += Sha1.hash(piece_bytes)
+                                piece_bytes = bytes()
+                            pbar.update(len(read_bytes))
+                sha1_str += Sha1.hash(piece_bytes) if piece_bytes else b''
+                pbar.close()
+            else: # not show progress bar
+                sha1_str = str()
+                piece_bytes = bytes()
+                for fpath in fpaths:
+                    with fpath.open('rb') as fobj:
+                        while (read_bytes := fobj.read(self.piece_length - len(piece_bytes))):
+                            piece_bytes += read_bytes
+                            if len(piece_bytes) == self.piece_length:
+                                sha1_str += Sha1.hash(piece_bytes)
+                                piece_bytes = bytes()
+                sha1_str += Sha1.hash(piece_bytes) if piece_bytes else b''
         else:
-            print('Nothing was updated as the content size is 0.')
+            raise ValueError('The supplied files has a total size of 0')
+
+        # Everything looks good, let's update internal parameters
+        self.setName(self.name if preserve_name else cpath.name)
+        self._content_fpath_list = fpath_list
+        self._content_fsize_list = fsize_list
+        self._content_sha1 = Sha1(sha1_str)
+
+
 
 
     def write(self, fpath, /, handle_existing='skip', with_time_suffix=True):
@@ -879,17 +883,18 @@ class Torrent():
                 fpath.write_bytes(bencode(self.torrent_dict))
                 print(f"Torrent saved to '{fpath}' (overwritten)")
             if handle_existing == 'prompt':
-                if input(f"A file already exists at '{fpath}'\n"
+                if input(f"The target '{fpath}' already exists.\n"
                          f"Overwrite? (Y/y to OVERWRITE, or anything else to cancel): ").lower() == 'y':
                     fpath.unlink()
                     fpath.write_bytes(bencode(self.torrent_dict))
-                    print(f'Torrent saved to \'{fpath} (overwritten)\'')
+                    print(f"Torrent saved to '{fpath}' (overwritten).")
                 else:
                     print('Cancelled')
-                    ret = f"A file already exists at '{fpath}"
+                    ret = f"A file already exists at '{fpath}."
         else: #
             fpath.write_bytes(bencode(self.torrent_dict))
-            print(f'Torrent saved to \'{fpath}\'')
+            print(f"Torrent saved to '{fpath}'.")
+
         return ret
 
 
@@ -902,10 +907,10 @@ class Torrent():
             ret.append('there is no content file in the torrent')
         if not self.piece_length:
             ret.append('piece size cannot be 0')
-        if self.piece_length * (len(self.pieces) - 1) >= self.content_size:
-            ret.append('torrent size smaller than expected')
-        if self.piece_length * (len(self.pieces)) < self.content_size:
-            ret.append('torrent size larger than expected')
+        if self.piece_length * (self.num_pieces - 1) > self.content_size:
+            ret.append('too many pieces for content size')
+        if self.piece_length * self.num_pieces < self.content_size:
+            ret.append('too less pieces for content size')
         try:
             bencode(self.torrent_dict)
         except Exception as e:
@@ -1094,6 +1099,28 @@ CLI functions
 def _resolveArgs(args):
 
 
+    def __pickCliCfg(args):
+        cfg = dict()
+
+        cfg['show_prompt'] = args.show_prompt
+        cfg['with_time_suffix'] = args.with_time_suffix
+        try:
+            import tqdm
+            global tqdm
+        except ImportError:
+            if cfg['show_prompt']:
+                print('I: Progress bar won\'t show as it\'s not installed, consider `pip3.8 install tqdm`.')
+            cfg['show_progress'] = False # tqdm is not installed, so don't use progress bar
+        else:
+            cfg['show_progress'] = args.show_progress # it's still controlled by `INTERACTIVE`
+
+        global INTERACTIVE, SHOW_PROMPT
+        INTERACTIVE = True
+        SHOW_PROMPT = cfg['show_prompt']
+
+        return cfg
+
+
     def __inferMode(fpaths):
         '''Inferring working mode from the number of paths is limited: some modes cannot be inferred'''
         ret = None
@@ -1116,44 +1143,33 @@ def _resolveArgs(args):
 
     def __sortPath(fpaths, mode):
         '''Based on the working mode, sort out the most proper paths for torrent and content.'''
-        content_fpath = torrent_fpath = None
+        cpath = tpath = None
 
         # `create` mode requires 1 or 2 paths
-        # the first path of non-torrent file/dir will be selected as the content path
-        # if both are torrent files, the first path is selected as the content path
-        # the other path is the optional torrent path to save to
-        # if the torrent path is not specified, the torrent is saved along with the content path
+        # the first path must be the existing content source
+        # the second path is the optional torrent path to save to
         if mode == 'create':
-            if len(fpaths) == 1: # only 1 path, which must be the content path
-                if fpaths[0].is_file() and fpaths[0].name == '.torrent':
-                    print('W: Torrent is being created from a torrent, which is generally not expected.')
-                content_fpath = fpaths[0]
-                torrent_fpath = content_fpath.parent.joinpath(content_fpath.name + '.torrent')
-            elif len(fpaths) == 2:
-                # path 0 is a non-torrent file/dir
-                if fpaths[0].is_dir() or (paths[0].is_file() and paths[0].suffix != '.torrent'):
-                    content_fpath = fpaths[0]
-                    torrent_fpath = fpaths[1].with_suffix('.torrent') if fpaths[1].is_file() else \
-                                    fpaths[1].joinpath(content_fpath.name + '.torrent')
-                # path 1 is a non-torrent file/dir
-                elif fpaths[1].is_dir() or (paths[1].is_file() and paths[1].suffix != '.torrent'):
-                    content_fpath = fpaths[1]
-                    torrent_fpath = fpaths[0].with_suffix('.torrent') if fpaths[0].is_file() else \
-                                    fpaths[0].joinpath(content_fpath.name + '.torrent')
-                # both are torrent files
+            if 1 <= len(fpaths) <= 2:
+                if fpaths[0].exists():
+                    cpath = fpaths[0]
+                    tpath = cpath.parent.joinpath(f"{cpath.name}.torrent") if not fpaths[1:] else (
+                            fpaths[1].joinpath(f"{cpath.name}.torrent") if fpaths[1].is_dir() else (
+                            fpaths[1] if fpaths[1].suffix == '.torrent' else \
+                            fpaths[1].parent.joinpath(f"{fpaths[1].name}.torrent")))
+                    if cpath.is_file() and cpath.suffix == '.torrent':
+                        _print('W: You are likely creating torrent from torrent, which may be not expected.')
+                    if cpath == tpath:
+                        raise ValueError('Source and torrent path cannot be same.')
                 else:
-                    print('W: You are creating from a torrent, which is generally not expected.')
-                    content_fpath = fpaths[0]
-                    torrent_fpath = fpaths[1].with_suffix('.torrent') if fpaths[1].is_file() else \
-                                    fpaths[1].joinpath(content_fpath.name + '.torrent')
+                    raise FileNotFoundError(f"The source '{fpaths}' does not exist.")
             else:
-                raise ValueError(f'`create` mode expects 1 or 2 paths, not {len(fpaths)}')
+                raise ValueError(f"`create` mode expects 1 or 2 paths, not {len(fpaths)}.")
 
         # `print` mode requires exactly 1 path, which must be a torrent file
         elif mode == 'print':
             if len(fpaths) == 1:
                 if fpaths[0].is_file() and fpaths[0].suffix == '.torrent':
-                    torrent_fpath = fpaths[0]
+                    tpath = fpaths[0]
                 else:
                     raise ValueError(f'`print` mode expects a torrent path, not {fpaths[0]}')
             else:
@@ -1165,11 +1181,11 @@ def _resolveArgs(args):
         elif mode == 'verify':
             if len(fpaths) == 2:
                 if fpaths[0].is_file() and fpaths[0].suffix == '.torrent':
-                    torrent_fpath = fpaths[0]
-                    content_fpath = fpaths[1]
+                    tpath = fpaths[0]
+                    cpath = fpaths[1]
                 elif fpaths[1].is_file() and fpaths[1].suffix == '.torrent':
-                    torrent_fpath = fpaths[1]
-                    content_fpath = fpaths[0]
+                    tpath = fpaths[1]
+                    cpath = fpaths[0]
                 else:
                     raise ValueError(f'`verify` mode expects a torrent path, but not found')
             else:
@@ -1178,19 +1194,19 @@ def _resolveArgs(args):
         # `modify` mode requires 1 or 2 paths
         # the first path is always the torrent file to load from
         # the second path is an optional alternative path to save the manipulated torrent
-        # `content_fpath` is the torrent to load from, `torrent_fpath` is the path to save to
+        # `cpath` is the torrent to load from, `tpath` is the path to save to
         elif mode == 'modify':
             if len(fpaths) == 1:
                 if fpaths[0].is_file() and fpaths[0].suffix == '.torrent':
-                    content_fpath = fpaths[0]
-                    torrent_fpath = content_fpath.parent.joinpath(content_fpath.name + '.torrent')
+                    cpath = fpaths[0]
+                    tpath = content_fpath.parent.joinpath(content_fpath.name + '.torrent')
                 else:
                     raise ValueError(f'`modify` mode expects a torrent path, not {fpaths[0]}')
             elif len(fpaths) == 2:
                 if fpaths[0].is_file() and fpaths[0].suffix == '.torrent':
-                    content_fpath = fpath[0]
-                    torrent_fpath = fpaths[1].with_suffix('.torrent') if fpaths[1].is_file() else \
-                                    fpaths[1].joinpath(content_fpath.name + '.torrent')
+                    cpath = fpath[0]
+                    tpath = fpaths[1].with_suffix('.torrent') if fpaths[1].is_file() else \
+                                    fpaths[1].parent.joinpath(content_fpath.name + '.torrent')
                 else:
                     raise ValueError(f'`modify` mode expects a torrent path, but not found')
             else:
@@ -1199,7 +1215,7 @@ def _resolveArgs(args):
         else:
             raise ValueError('Failed to sort paths for torrent and content')
 
-        return torrent_fpath, content_fpath
+        return tpath, cpath
 
 
     def __pickMetadata(args, mode):
@@ -1220,36 +1236,15 @@ def _resolveArgs(args):
         return metadata
 
 
-    def __pickCliCfg(args):
-        cfg = dict()
-
-        cfg['show_prompt'] = args.show_prompt
-        cfg['with_time_suffix'] = args.with_time_suffix
-        try:
-            import tqdm
-        except ImportError:
-            if cfg['show_prompt']:
-                print('I: Progress bar won\'t show as it\'s not installed, consider `pip3.8 install tqdm`.')
-            cfg['show_progress'] = False # tqdm is not installed, so don't use progress bar
-        else:
-            cfg['show_progress'] = args.show_progress # it's still controlled by `INTERACTIVE`
-
-        return cfg
-
-
+    # extract cli config from cli arguments
+    cfg = __pickCliCfg(args)
     # if mode is not specified, infer it from the number of supplied paths
     mode = args.mode if args.mode else __inferMode(args.fpaths)
     # based on the working mode, pick the most likely torrent and content paths
     torrent_fpath, content_fpath = __sortPath(args.fpaths, mode)
     # extract metadata from cli arguments
     metadata = __pickMetadata(args, mode)
-    # extract cli config from cli arguments
-    cfg = __pickCliCfg(args)
 
-    # we are now in cli usage scenario
-    global INTERACTIVE, SHOW_PROMPT
-    INTERACTIVE = True
-    SHOW_PROMPT = cfg['show_prompt']
 
     return mode, torrent_fpath, content_fpath, metadata, cfg
 
@@ -1260,11 +1255,10 @@ def _main(args):
     mode, torrent_fpath, content_fpath, metadata, cfg = _resolveArgs(args)
     torrent = Torrent()
     if mode == 'create':
-        print(f"Creating a new torrent")
-        print(f"S: '{content_fpath}'")
-        torrent.load(content_fpath)
+        print(f"Creating torrent from '{content_fpath}'.")
+        torrent.load(content_fpath, False, cfg['show_progress'])
         torrent.set(**metadata)
-        torrent.write(torrent_fpath, 'prompt' if cfg.show_prompt else 'overwrite', cfg.with_time_suffix)
+        torrent.write(torrent_fpath, 'prompt' if cfg['show_prompt'] else 'overwrite', cfg['with_time_suffix'])
     elif mode == 'print':
         torrent.read(torrent_fpath)
         torrent.print()
@@ -1278,7 +1272,7 @@ def _main(args):
         print(f"Modifying torrent metadata")
         torrent.read(content_fpath)
         torrent.set(**metadata)
-        torrent.write(torrent_fpath, 'prompt' if cfg.show_prompt else 'overwrite', cfg.with_time_suffix)
+        torrent.write(torrent_fpath, 'prompt' if cfg['show_prompt'] else 'overwrite', cfg['with_time_suffix'])
     else:
         raise ValueError(f'Invalid mode: {mode}')
 
@@ -1307,7 +1301,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(prog='TorrentUtils', formatter_class=lambda prog: _CustomHelpFormatter(prog))
 
-    parser.add_argument('fpaths', nargs='+', type=pathlib.Path,
+    parser.add_argument('fpaths', nargs='*', type=pathlib.Path,
                         help='1 or 2 paths depending on mode', metavar='path')
     parser.add_argument('-m', '--mode', choices=('create', 'print', 'verify', 'modify'), default='',
                         help='will be guessed from paths if not specified')
