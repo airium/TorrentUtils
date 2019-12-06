@@ -9,10 +9,11 @@ import hashlib
 import pathlib
 import warnings
 import argparse
-import operator
-import collections
-import itertools
-import functools
+
+from operator import methodcaller
+from itertools import chain
+from functools import partial
+from collections import namedtuple
 
 
 # by default, we are in lib usage scenario, so disable stdio and raise exception on incorrect usage
@@ -61,7 +62,7 @@ def bencode(obj, enc:str='utf-8') -> bytes:
     elif tobj is int:
         ret = b"i" + str(obj).encode(enc) + b"e"
     elif tobj in (list, tuple):
-        ret = b"l" + b"".join(map(functools.partial(bencode, enc=enc), obj)) + b"e"
+        ret = b"l" + b"".join(map(partial(bencode, enc=enc), obj)) + b"e"
     elif tobj is dict:
         ret = b'd'
         for key, val in sorted(obj.items()):
@@ -705,8 +706,8 @@ class Torrent():
         encoding = torrent_dict.get(b'encoding', b'utf-8').decode()                 # str
         # tracker list requires deduplication
         trackers = [torrent_dict[b'announce']] if torrent_dict.get(b'announce') else []
-        trackers += list(itertools.chain(*torrent_dict[b'announce-list'])) if torrent_dict.get(b'announce-list') else []
-        trackers = list(map(operator.methodcaller('decode', encoding), trackers))   # bytes to str
+        trackers += list(chain(*torrent_dict[b'announce-list'])) if torrent_dict.get(b'announce-list') else []
+        trackers = list(map(methodcaller('decode', encoding), trackers))   # bytes to str
         trackers = list(dict.fromkeys(trackers))                                    # ordered deduplicate
         # other keys
         comment = torrent_dict.get(b'comment', b'').decode(encoding)                # str
@@ -734,7 +735,7 @@ class Torrent():
             fpath_list = []
             for file in files:
                 fsize_list.append(file[b'length'])
-                fpath_list.append(pathlib.Path().joinpath(*map(operator.methodcaller('decode', encoding), file[b'path'])))
+                fpath_list.append(pathlib.Path().joinpath(*map(methodcaller('decode', encoding), file[b'path'])))
             self._content_fsize_list = fsize_list
             self._content_fpath_list = fpath_list
         else:
@@ -807,7 +808,7 @@ class Torrent():
         keep_name = bool(keep_name)
         show_progress = bool(show_progress)
 
-        fpaths = [spath] if spath.is_file() else sorted(filter(operator.methodcaller('is_file'), spath.rglob('*')))
+        fpaths = [spath] if spath.is_file() else sorted(filter(methodcaller('is_file'), spath.rglob('*')))
         fpath_list = [fpath.relative_to(spath) for fpath in fpaths]
         fsize_list = [fpath.stat().st_size for fpath in fpaths]
         if sum(fsize_list):
@@ -1101,7 +1102,7 @@ def _resolveArgs(args):
 
     def __pickCliCfg(args):
 
-        cfg = collections.namedtuple('CFG', '     show_prompt       show_progress       with_time_suffix')(
+        cfg = namedtuple('CFG', '     show_prompt       show_progress       with_time_suffix')(
                                              args.show_prompt, args.show_progress, args.with_time_suffix)
         if cfg.show_progress:
             try:
