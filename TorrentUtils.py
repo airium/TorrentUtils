@@ -865,7 +865,7 @@ class Torrent():
         if fpath.is_file() and not overwrite:
             raise FileExistsError(f"The target '{fpath}' already exists.")
         else:
-            fpath.mkdir(parents=True, exist_ok=True)
+            fpath.parent.mkdir(parents=True, exist_ok=True)
             fpath.write_bytes(bencode(self.torrent_dict))
 
 
@@ -1069,13 +1069,43 @@ CLI functions
 ====================================================================================================================='''
 
 
-def _resolveArgs(args):
+class Main():
 
 
+    def __init__(self, args):
+
+        global INTERACTIVE, SHOW_PROMPT
+        INTERACTIVE = True
+        SHOW_PROMPT = bool(args.show_prompt)
+
+        self.torrent = Torrent()
+        # extract cli config from cli arguments
+        self.cfg = self.__pickCliCfg(args)
+        # if mode is not specified, infer it from the number of supplied paths
+        self.mode = args.mode if args.mode else self.__inferMode(args.fpaths)
+        # based on the working mode, pick the most likely torrent and content paths
+        self.tpath, self.spath = self.__sortPath(args.fpaths, self.mode)
+        # extract metadata from cli arguments
+        self.metadata = self.__pickMetadata(args, self.mode)
+
+
+    def __call__(self):
+        if self.mode == 'create':
+            self.create()
+        elif self.mode == 'print':
+            self.print()
+        elif self.mode == 'verify':
+            self.verify()
+        elif self.mode == 'modify':
+            self.modify()
+        else:
+            raise ValueError(f'Invalid mode: {mode}.')
+
+
+    @staticmethod
     def __pickCliCfg(args):
-
         cfg = namedtuple('CFG', '     show_prompt       show_progress       with_time_suffix')(
-                                             args.show_prompt, args.show_progress, args.with_time_suffix)
+                                 args.show_prompt, args.show_progress, args.with_time_suffix)
         if cfg.show_progress:
             try:
                 import tqdm
@@ -1083,10 +1113,10 @@ def _resolveArgs(args):
             except ImportError:
                 print('I: Progress bar won\'t show as it\'s not installed, consider `pip3.8 install tqdm`.')
                 cfg._replace(show_progress=False) # tqdm is not installed, so don't use progress bar anyway
-
         return cfg
 
 
+    @staticmethod
     def __inferMode(fpaths):
         '''Inferring working mode from the number of paths is limited: some modes cannot be inferred'''
         ret = None
@@ -1107,6 +1137,7 @@ def _resolveArgs(args):
         return ret
 
 
+    @staticmethod
     def __sortPath(fpaths, mode):
         '''Based on the working mode, sort out the most proper paths for torrent and content.'''
         spath = None # Content PATH is the path to the files specified by a torrent
@@ -1181,6 +1212,7 @@ def _resolveArgs(args):
         return tpath, spath
 
 
+    @staticmethod
     def __pickMetadata(args, mode):
         metadata = dict()
 
@@ -1198,49 +1230,32 @@ def _resolveArgs(args):
 
         return metadata
 
-    global INTERACTIVE, SHOW_PROMPT
-    INTERACTIVE = True
-    SHOW_PROMPT = bool(args.show_prompt)
 
-    # extract cli config from cli arguments
-    cfg = __pickCliCfg(args)
-    # if mode is not specified, infer it from the number of supplied paths
-    mode = args.mode if args.mode else __inferMode(args.fpaths)
-    # based on the working mode, pick the most likely torrent and content paths
-    tpath, spath = __sortPath(args.fpaths, mode)
-    # extract metadata from cli arguments
-    metadata = __pickMetadata(args, mode)
+    def create(self):
+        print(f"Creating torrent from '{self.spath}'.")
+        self.torrent.load(self.spath, False, self.cfg.show_progress)
+        self.torrent.set(**self.metadata)
+        self.torrent.write(self.tpath)
 
 
-    return mode, tpath, spath, metadata, cfg
+    def print(self):
+        self.torrent.read(self.tpath)
+        self.torrent.print()
 
 
-
-
-def _main(args):
-    mode, tpath, spath, metadata, cfg = _resolveArgs(args)
-    torrent = Torrent()
-    if mode == 'create':
-        print(f"Creating torrent from '{spath}'.")
-        torrent.load(spath, False, cfg.show_progress)
-        torrent.set(**metadata)
-        torrent.write(tpath)
-    elif mode == 'print':
-        torrent.read(tpath)
-        torrent.print()
-    elif mode == 'verify':
+    def verify(self):
         print(f"Verifying torrent against files")
-        print(f"T: '{tpath}'")
-        print(f"F: '{spath}'")
-        torrent.read(tpath)
-        torrent.verify(spath)
-    elif mode == 'modify':
+        print(f"T: '{self.tpath}'")
+        print(f"F: '{self.spath}'")
+        self.torrent.read(self.tpath)
+        self.torrent.verify(self.spath)
+
+
+    def modify(self):
         print(f"Modifying torrent metadata")
-        torrent.read(spath)
-        torrent.set(**metadata)
-        torrent.write(tpath)
-    else:
-        raise ValueError(f'Invalid mode: {mode}')
+        self.torrent.read(self.spath)
+        self.torrent.set(**self.metadata)
+        self.torrent.write(self.tpath)
 
 
 
@@ -1295,4 +1310,4 @@ if __name__ == '__main__':
                         help='don\'t display the progress bar in creating torrent')
     parser.add_argument('--version', action='version', version='%(prog)s 0.9')
 
-    _main(parser.parse_args())
+    Main(parser.parse_args())()
