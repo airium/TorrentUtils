@@ -791,32 +791,31 @@ class Torrent():
                 continue
 
 
-    def load(self, spath, preserve_name=False, show_progress=False):
-        '''This member function refreshes the core info of a torrent: file list/size and piece hash.
-        By default, it loads files from internal file path with internal piece size.
-        Optionally, you can supply alternative file path and piece size, and choose whether to preserve torrent name.
+    def load(self, spath, keep_name=False, show_progress=False):
+        '''Load new file list and piece hash from the Source PATH (spath).
 
-        The following public attributes will be overwritten on success:
-            self.files
-            self.length
-            self.name (may be preserved by `preserve_name=True`)
-            self.piece_length
-            self.pieces
+        The following torrent keys will be overwritten on success:
+            files, name (may be preserved by `keep_name=True`), pieces
+
+        Arguments:
+        spath: path-like objects, the source path to be loaded
+        keep_name: bool=False, whether to keep the old torrent name
+        show_progress: bool=False, whether to show a progress bar during loading, maybe removed in the future
         '''
+        # argument handler
         spath = pathlib.Path(spath)
-        preserve_name = bool(preserve_name)
+        keep_name = bool(keep_name)
+        show_progress = bool(show_progress)
 
         fpaths = [spath] if spath.is_file() else sorted(filter(operator.methodcaller('is_file'), spath.rglob('*')))
         fpath_list = [fpath.relative_to(spath) for fpath in fpaths]
         fsize_list = [fpath.stat().st_size for fpath in fpaths]
         if sum(fsize_list):
-            if show_progress:
+            if show_progress: # TODO: stdout is dirty in core class method and should be moved out
                 sha1_str = str()
                 piece_bytes = bytes()
                 pbar = tqdm.tqdm(total=sum(fsize_list), unit='B', unit_scale=True)
-                # terminal_width = shutil.get_terminal_size()[0] // 3
                 for fpath in fpaths:
-                    # pbar.set_description(str(fpath)[-terminal_width:], refresh=True)
                     with fpath.open('rb') as fobj:
                         while (read_bytes := fobj.read(self.piece_length - len(piece_bytes))):
                             piece_bytes += read_bytes
@@ -838,10 +837,10 @@ class Torrent():
                                 piece_bytes = bytes()
                 sha1_str += Sha1.hash(piece_bytes) if piece_bytes else b''
         else:
-            raise ValueError('The supplied files has a total size of 0')
+            raise ValueError(f"The source path '{spath.absolute()}' has a total size of 0")
 
         # Everything looks good, let's update internal parameters
-        self.name = self.name if preserve_name else spath.name
+        self.name = self.name if keep_name else spath.name
         self._content_fpath_list = fpath_list
         self._content_fsize_list = fsize_list
         self._content_sha1 = Sha1(sha1_str)
