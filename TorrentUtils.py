@@ -849,54 +849,26 @@ class Torrent():
 
 
 
-    def write(self, fpath, /, handle_existing='skip', with_time_suffix=True):
-        '''Save the torrent to a file
+    def write(self, tpath, overwrite=False):
+        '''Save the torrent to file.
 
         Arguments:
-        fpath: an alternative path to save the torrent, otherwise it's written to the internal torrent path.
-            value: path-like object (required, positional-only)
-        handle_existing: what to do if the target path exists; will always skip if an existing dir is present.
-            value: {skip, overwrite, prompt} (default=skip)
-        with_time_suffix: whether to insert YYMMDD-HHmmss in the filename.
-            value: bool (default=True)
-
-        Return: return the reason why it was not successfully saved
+        tpath: path-like object, the path to save the torrent.
+            If supplied an existing dir, it will be saved under that dir.
+        overwrite: bool=False, whether to overwrite if the target file already exists.
         '''
-
-        assert handle_existing in {'skip', 'overwrite', 'prompt'}, 'expect {skip, overwrite, prompt};' \
-                                                                   f"not '{handle_existing}'"
+        tpath = pathlib.Path(tpath)
+        overwrite = bool(overwrite)
         assert self.isValid(), f'the torrent is not ready to be saved: {self.whyInvalid()}'
 
-        with_time_suffix = bool(with_time_suffix)
-        fpath = pathlib.Path(fpath).absolute()
-        fpath = fpath.with_suffix(f'{"." + time.strftime("%y%m%d-%H%M%S") if with_time_suffix else ""}.torrent')
-
-        ret = True
-        if fpath.is_dir():
-            raise IsADirectoryError(f'a directory exists at {fpath}; '
-                                    f'please remove it before writing torrent')
-        elif fpath.is_file():
-            if handle_existing == 'skip':
-                print(f"A file already exists at '{fpath}'; skipped")
-                ret = False
-            if handle_existing == 'overwrite':
-                fpath.unlink()
-                fpath.write_bytes(bencode(self.torrent_dict))
-                print(f"Torrent saved to '{fpath}' (overwritten)")
-            if handle_existing == 'prompt':
-                if input(f"The target '{fpath}' already exists.\n"
-                         f"Overwrite? (Y/y to OVERWRITE, or anything else to cancel): ").lower() == 'y':
-                    fpath.unlink()
-                    fpath.write_bytes(bencode(self.torrent_dict))
-                    print(f"Torrent saved to '{fpath}' (overwritten).")
-                else:
-                    print('Cancelled')
-                    ret = f"A file already exists at '{fpath}."
-        else: #
+        fpath = tpath.joinpath(f"{self.name}.torrent") if tpath.is_dir() else tpath
+        if fpath.is_file() and not overwrite:
+            raise FileExistsError(f"The target '{fpath}' already exists.")
+        else:
+            fpath.mkdir(parents=True, exist_ok=True)
             fpath.write_bytes(bencode(self.torrent_dict))
-            print(f"Torrent saved to '{fpath}'.")
 
-        return ret
+
 
 
     def whyInvalid(self):
@@ -1252,7 +1224,7 @@ def _main(args):
         print(f"Creating torrent from '{spath}'.")
         torrent.load(spath, False, cfg.show_progress)
         torrent.set(**metadata)
-        torrent.write(tpath, 'prompt' if cfg.show_progress else 'overwrite', cfg.with_time_suffix)
+        torrent.write(tpath)
     elif mode == 'print':
         torrent.read(tpath)
         torrent.print()
@@ -1266,7 +1238,7 @@ def _main(args):
         print(f"Modifying torrent metadata")
         torrent.read(spath)
         torrent.set(**metadata)
-        torrent.write(tpath, 'prompt' if cfg.show_progress else 'overwrite', cfg.with_time_suffix)
+        torrent.write(tpath)
     else:
         raise ValueError(f'Invalid mode: {mode}')
 
