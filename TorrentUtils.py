@@ -841,8 +841,7 @@ class Torrent():
             raise ValueError('The supplied files has a total size of 0')
 
         # Everything looks good, let's update internal parameters
-        self.name =
-        self.setName(self.name if preserve_name else spath.name)
+        self.name = self.name if preserve_name else spath.name
         self._content_fpath_list = fpath_list
         self._content_fsize_list = fsize_list
         self._content_sha1 = Sha1(sha1_str)
@@ -1102,23 +1101,16 @@ def _resolveArgs(args):
 
 
     def __pickCliCfg(args):
-        cfg = dict()
 
-        cfg['show_prompt'] = args.show_prompt
-        cfg['with_time_suffix'] = args.with_time_suffix
-        try:
-            import tqdm
-            global tqdm
-        except ImportError:
-            if cfg['show_prompt']:
+        cfg = collections.namedtuple('CFG', '     show_prompt       show_progress       with_time_suffix')(
+                                             args.show_prompt, args.show_progress, args.with_time_suffix)
+        if cfg.show_progress:
+            try:
+                import tqdm
+                global tqdm
+            except ImportError:
                 print('I: Progress bar won\'t show as it\'s not installed, consider `pip3.8 install tqdm`.')
-            cfg['show_progress'] = False # tqdm is not installed, so don't use progress bar
-        else:
-            cfg['show_progress'] = args.show_progress # it's still controlled by `INTERACTIVE`
-
-        global INTERACTIVE, SHOW_PROMPT
-        INTERACTIVE = True
-        SHOW_PROMPT = cfg['show_prompt']
+                cfg._replace(show_progress=False) # tqdm is not installed, so don't use progress bar anyway
 
         return cfg
 
@@ -1234,6 +1226,9 @@ def _resolveArgs(args):
 
         return metadata
 
+    global INTERACTIVE, SHOW_PROMPT
+    INTERACTIVE = True
+    SHOW_PROMPT = bool(args.show_prompt)
 
     # extract cli config from cli arguments
     cfg = __pickCliCfg(args)
@@ -1255,9 +1250,9 @@ def _main(args):
     torrent = Torrent()
     if mode == 'create':
         print(f"Creating torrent from '{spath}'.")
-        torrent.load(spath, False, cfg['show_progress'])
+        torrent.load(spath, False, cfg.show_progress)
         torrent.set(**metadata)
-        torrent.write(tpath, 'prompt' if cfg['show_prompt'] else 'overwrite', cfg['with_time_suffix'])
+        torrent.write(tpath, 'prompt' if cfg.show_progress else 'overwrite', cfg.with_time_suffix)
     elif mode == 'print':
         torrent.read(tpath)
         torrent.print()
@@ -1271,7 +1266,7 @@ def _main(args):
         print(f"Modifying torrent metadata")
         torrent.read(spath)
         torrent.set(**metadata)
-        torrent.write(tpath, 'prompt' if cfg['show_prompt'] else 'overwrite', cfg['with_time_suffix'])
+        torrent.write(tpath, 'prompt' if cfg.show_progress else 'overwrite', cfg.with_time_suffix)
     else:
         raise ValueError(f'Invalid mode: {mode}')
 
