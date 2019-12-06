@@ -10,6 +10,7 @@ import pathlib
 import warnings
 import argparse
 import operator
+import collections
 import itertools
 import functools
 
@@ -790,7 +791,7 @@ class Torrent():
                 continue
 
 
-    def load(self, cpath, preserve_name=False, show_progress=False):
+    def load(self, spath, preserve_name=False, show_progress=False):
         '''This member function refreshes the core info of a torrent: file list/size and piece hash.
         By default, it loads files from internal file path with internal piece size.
         Optionally, you can supply alternative file path and piece size, and choose whether to preserve torrent name.
@@ -802,11 +803,11 @@ class Torrent():
             self.piece_length
             self.pieces
         '''
-        cpath = pathlib.Path(cpath)
+        spath = pathlib.Path(spath)
         preserve_name = bool(preserve_name)
 
-        fpaths = [cpath] if cpath.is_file() else sorted(filter(operator.methodcaller('is_file'), cpath.rglob('*')))
-        fpath_list = [fpath.relative_to(cpath) for fpath in fpaths]
+        fpaths = [spath] if spath.is_file() else sorted(filter(operator.methodcaller('is_file'), spath.rglob('*')))
+        fpath_list = [fpath.relative_to(spath) for fpath in fpaths]
         fsize_list = [fpath.stat().st_size for fpath in fpaths]
         if sum(fsize_list):
             if show_progress:
@@ -840,7 +841,8 @@ class Torrent():
             raise ValueError('The supplied files has a total size of 0')
 
         # Everything looks good, let's update internal parameters
-        self.setName(self.name if preserve_name else cpath.name)
+        self.name =
+        self.setName(self.name if preserve_name else spath.name)
         self._content_fpath_list = fpath_list
         self._content_fsize_list = fsize_list
         self._content_sha1 = Sha1(sha1_str)
@@ -1143,79 +1145,76 @@ def _resolveArgs(args):
 
     def __sortPath(fpaths, mode):
         '''Based on the working mode, sort out the most proper paths for torrent and content.'''
-        cpath = tpath = None
+        spath = None # Content PATH is the path to the files specified by a torrent
+        tpath = None # Torrent PATH is the path to the torrent itself
 
         # `create` mode requires 1 or 2 paths
-        # the first path must be the existing content source
-        # the second path is the optional torrent path to save to
+        # the first path must be an existing spath
+        # the second path is optional and must be tpath if supplied
         if mode == 'create':
             if 1 <= len(fpaths) <= 2:
                 if fpaths[0].exists():
-                    cpath = fpaths[0]
-                    tpath = cpath.parent.joinpath(f"{cpath.name}.torrent") if not fpaths[1:] else (
-                            fpaths[1].joinpath(f"{cpath.name}.torrent") if fpaths[1].is_dir() else (
+                    spath = fpaths[0]
+                    tpath = spath.parent.joinpath(f"{spath.name}.torrent") if not fpaths[1:] else (
+                            fpaths[1].joinpath(f"{spath.name}.torrent") if fpaths[1].is_dir() else (
                             fpaths[1] if fpaths[1].suffix == '.torrent' else \
                             fpaths[1].parent.joinpath(f"{fpaths[1].name}.torrent")))
-                    if cpath.is_file() and cpath.suffix == '.torrent':
-                        _print('W: You are likely creating torrent from torrent, which may be not expected.')
-                    if cpath == tpath:
+                    if spath.is_file() and spath.suffix == '.torrent':
+                        _print('W: You are likely to create torrent from torrent, which may be unexpected.')
+                    if spath == tpath:
                         raise ValueError('Source and torrent path cannot be same.')
                 else:
-                    raise FileNotFoundError(f"The source '{fpaths}' does not exist.")
+                    raise FileNotFoundError(f"The source '{fpaths[0]}' does not exist.")
             else:
                 raise ValueError(f"`create` mode expects 1 or 2 paths, not {len(fpaths)}.")
 
-        # `print` mode requires exactly 1 path, which must be a torrent file
+        # `print` mode requires exactly 1 path
+        # the path must be an existing tpath
         elif mode == 'print':
             if len(fpaths) == 1:
                 if fpaths[0].is_file() and fpaths[0].suffix == '.torrent':
                     tpath = fpaths[0]
                 else:
-                    raise ValueError(f'`print` mode expects a torrent path, not {fpaths[0]}')
+                    raise FileNotFoundError(f'`print` mode expects a valid torrent path, not {fpaths[0]}.')
             else:
-                raise ValueError(f'`print` mode expects exactly 1 paths, not {len(fpaths)}')
+                raise ValueError(f'`print` mode expects exactly 1 path, not {len(fpaths)}.')
 
         # `verify` mode requires exactly 2 paths
-        # the first path of a torrent file is selected as the torrent file
-        # the other path is left as the content path
+        # the first path must be an existing spath
+        # the second path must be an existing tpath
+        # the logic goes like "verify spath with tpath", so spath first tpath second
         elif mode == 'verify':
             if len(fpaths) == 2:
-                if fpaths[0].is_file() and fpaths[0].suffix == '.torrent':
-                    tpath = fpaths[0]
-                    cpath = fpaths[1]
-                elif fpaths[1].is_file() and fpaths[1].suffix == '.torrent':
+                if fpaths[0].exists() and fpaths[1].is_file() and fpaths[1].suffix == '.torrent':
+                    spath = fpaths[0]
                     tpath = fpaths[1]
-                    cpath = fpaths[0]
                 else:
-                    raise ValueError(f'`verify` mode expects a torrent path, but not found')
+                    raise ValueError(f'`verify` mode expects a pair of valid source and torrent paths, but not found.')
             else:
-                raise ValueError(f'`verify` mode expects exactly 2 paths, not {len(fpaths)}')
+                raise ValueError(f'`verify` mode expects exactly 2 paths, not {len(fpaths)}.')
 
         # `modify` mode requires 1 or 2 paths
-        # the first path is always the torrent file to load from
-        # the second path is an optional alternative path to save the manipulated torrent
-        # `cpath` is the torrent to load from, `tpath` is the path to save to
+        # the first path must be an existing path to the torrent you'd like to edit, denoted as spath
+        # the second path is optional, which is the alternative path to save the manipulated torrent
         elif mode == 'modify':
-            if len(fpaths) == 1:
+            if 1 <= len(fpaths) <= 2:
                 if fpaths[0].is_file() and fpaths[0].suffix == '.torrent':
-                    cpath = fpaths[0]
-                    tpath = content_fpath.parent.joinpath(content_fpath.name + '.torrent')
+                    spath = fpaths[0]
+                    tpath = spath if not fpaths[1:] else (
+                            fpaths[1].joinpath(spath.name) if fpaths[1].is_dir() else (
+                            fpaths[1] if fpaths[1].suffix == '.torrent' else \
+                            fpaths[1].parent.joinpath(f"{fpaths[1].name}.torrent")))
+                    if spath == tpath:
+                        _print('W: You are likely to overwrite the old torrent, which may be unexpected.')
                 else:
-                    raise ValueError(f'`modify` mode expects a torrent path, not {fpaths[0]}')
-            elif len(fpaths) == 2:
-                if fpaths[0].is_file() and fpaths[0].suffix == '.torrent':
-                    cpath = fpath[0]
-                    tpath = fpaths[1].with_suffix('.torrent') if fpaths[1].is_file() else \
-                                    fpaths[1].parent.joinpath(content_fpath.name + '.torrent')
-                else:
-                    raise ValueError(f'`modify` mode expects a torrent path, but not found')
+                    raise ValueError(f'`modify` mode expects a valid torrent path, not {fpaths[0]}')
             else:
-                raise ValueError(f'`modify` mode expects exactly 1 or 2 paths, not {len(fpaths)}')
+                raise ValueError(f'`modify` mode expects 1 or 2 paths, not {len(fpaths)}')
 
         else:
             raise ValueError('Failed to sort paths for torrent and content')
 
-        return tpath, cpath
+        return tpath, spath
 
 
     def __pickMetadata(args, mode):
@@ -1241,38 +1240,38 @@ def _resolveArgs(args):
     # if mode is not specified, infer it from the number of supplied paths
     mode = args.mode if args.mode else __inferMode(args.fpaths)
     # based on the working mode, pick the most likely torrent and content paths
-    torrent_fpath, content_fpath = __sortPath(args.fpaths, mode)
+    tpath, spath = __sortPath(args.fpaths, mode)
     # extract metadata from cli arguments
     metadata = __pickMetadata(args, mode)
 
 
-    return mode, torrent_fpath, content_fpath, metadata, cfg
+    return mode, tpath, spath, metadata, cfg
 
 
 
 
 def _main(args):
-    mode, torrent_fpath, content_fpath, metadata, cfg = _resolveArgs(args)
+    mode, tpath, spath, metadata, cfg = _resolveArgs(args)
     torrent = Torrent()
     if mode == 'create':
-        print(f"Creating torrent from '{content_fpath}'.")
-        torrent.load(content_fpath, False, cfg['show_progress'])
+        print(f"Creating torrent from '{spath}'.")
+        torrent.load(spath, False, cfg['show_progress'])
         torrent.set(**metadata)
-        torrent.write(torrent_fpath, 'prompt' if cfg['show_prompt'] else 'overwrite', cfg['with_time_suffix'])
+        torrent.write(tpath, 'prompt' if cfg['show_prompt'] else 'overwrite', cfg['with_time_suffix'])
     elif mode == 'print':
-        torrent.read(torrent_fpath)
+        torrent.read(tpath)
         torrent.print()
     elif mode == 'verify':
         print(f"Verifying torrent against files")
-        print(f"T: '{torrent_fpath}'")
-        print(f"F: '{content_fpath}'")
-        torrent.read(torrent_fpath)
-        torrent.verify(content_fpath)
+        print(f"T: '{tpath}'")
+        print(f"F: '{spath}'")
+        torrent.read(tpath)
+        torrent.verify(spath)
     elif mode == 'modify':
         print(f"Modifying torrent metadata")
-        torrent.read(content_fpath)
+        torrent.read(spath)
         torrent.set(**metadata)
-        torrent.write(torrent_fpath, 'prompt' if cfg['show_prompt'] else 'overwrite', cfg['with_time_suffix'])
+        torrent.write(tpath, 'prompt' if cfg['show_prompt'] else 'overwrite', cfg['with_time_suffix'])
     else:
         raise ValueError(f'Invalid mode: {mode}')
 
