@@ -1231,11 +1231,26 @@ class Main():
         return metadata
 
 
+    def _write(self):
+        fpath = self.tpath.with_suffix(f'{"." + time.strftime("%y%m%d-%H%M%S") if self.cfg.with_time_suffix else ""}.torrent')
+        try:
+            self.torrent.write(fpath, overwrite=False)
+            print(f"Torrent saved to '{fpath}'.")
+        except FileExistsError as e:
+            if (not self.cfg.show_prompt) or \
+               input(f"The target '{fpath}' already exists.\n"
+                     f"Overwrite? (Y/y to OVERWRITE, or anything else to cancel): ").lower() == 'y':
+                    self.torrent.write(fpath, overwrite=True)
+                    print(f"Torrent saved to '{fpath}' (overwritten).")
+            else:
+                print('Cancelled')
+
+
     def create(self):
         print(f"Creating torrent from '{self.spath}'.")
         self.torrent.load(self.spath, False, self.cfg.show_progress)
         self.torrent.set(**self.metadata)
-        self.torrent.write(self.tpath)
+        self._write()
 
 
     def print(self):
@@ -1255,7 +1270,7 @@ class Main():
         print(f"Modifying torrent metadata")
         self.torrent.read(self.spath)
         self.torrent.set(**self.metadata)
-        self.torrent.write(self.tpath)
+        self._write()
 
 
 
