@@ -17,11 +17,6 @@ from functools import partial
 from collections import namedtuple
 
 
-# by default, we are in lib usage scenario, so disable stdio and raise exception on incorrect usage
-INTERACTIVE = False # whether to enable all stdio inc. print and input, this is the global master switch
-SHOW_PROMPT = True # whether to enable prompt to ask user e.g. whether to overwrite, ruled by `INTERACTIVE`
-
-
 
 
 '''=====================================================================================================================
@@ -1051,11 +1046,6 @@ class Main():
 
 
     def __init__(self, args):
-
-        global INTERACTIVE, SHOW_PROMPT
-        INTERACTIVE = True
-        SHOW_PROMPT = bool(args.show_prompt)
-
         self.torrent = Torrent()
         # extract cli config from cli arguments
         self.cfg = self.__pickCliCfg(args)
