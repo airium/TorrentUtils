@@ -1001,38 +1001,6 @@ class Torrent():
         return piece_error_list
 
 
-    def print(self):
-
-        tname = self.name
-        tsize = f'{self.torrent_size:,} Bytes'
-        tencd = self.encoding
-        thash = self.hash
-        fsize = f'{self.content_size:,} Bytes'
-        fnum = f'{len(self.file_list)} File' + 's' if len(self.file_list) > 1 else ''
-        psize = self.piece_length >> 10
-        pnum = self.num_pieces
-        tdate = time.strftime('%Y/%m/%d %H:%M:%S', time.localtime(self.creation_date)) if self.creation_date \
-                else '----/--/-- --:--:--'
-        tfrom = self.created_by if self.created_by else '------------'
-        tpriv = 'Private' if self.private else 'Public'
-        tsour = f'from {self.source}' if self.source else ''
-        tcomm = self.comment
-
-        width = shutil.get_terminal_size()[0]
-
-        print(f'Info ' + '-' * (width - 6))
-        print(f"Name: {tname}")
-        print(f"File: {tsize}, {tencd}")
-        print(f"Hash: {thash}")
-        print(f"Size: {fsize}, {fnum}, {psize} KiB x {pnum} Pieces")
-        print(f"Time: {tdate} by {tfrom}")
-        print(f"Else: {tpriv} torrent {tsour}")
-        for i in range(0, math.ceil(len(tcomm) / width)):
-            print(f"Comm: {tcomm[i * width : (i + 1) * width]} ")
-        print(f'Tracker ' + '-' * (width - 9))
-        for i, url in enumerate(self.tracker_list):
-            print(eval("f'{i:0" + str(len(self.tracker_list) // 10 + 1) + "}: {url}'"))
-        # TODO: add the tree-view of files
 
 
 
@@ -1211,7 +1179,36 @@ class Main():
 
 
     def _print(self):
-        self.torrent.print()
+        tname = self.torrent.name
+        tsize = f'{self.torrent.torrent_size:,} Bytes'
+        tencd = self.torrent.encoding
+        thash = self.torrent.hash
+        fsize = f'{self.torrent.content_size:,} Bytes'
+        fnum = f'{len(self.torrent.file_list)} File' + 's' if len(self.torrent.file_list) > 1 else ''
+        psize = self.torrent.piece_length >> 10
+        pnum = self.torrent.num_pieces
+        tdate = time.strftime('%Y/%m/%d %H:%M:%S', time.localtime(self.torrent.creation_date)) if self.torrent.creation_date \
+                else '----/--/-- --:--:--'
+        tfrom = self.torrent.created_by if self.torrent.created_by else '------------'
+        tpriv = 'Private' if self.torrent.private else 'Public'
+        tsour = f'from {self.torrent.source}' if self.torrent.source else ''
+        tcomm = self.torrent.comment
+
+        width = shutil.get_terminal_size()[0]
+
+        print(f'Info ' + '-' * (width - 6))
+        print(f"Name: {tname}")
+        print(f"File: {tsize}, {tencd}")
+        print(f"Hash: {thash}")
+        print(f"Size: {fsize}, {fnum}, {psize} KiB x {pnum} Pieces")
+        print(f"Time: {tdate} by {tfrom}")
+        print(f"Else: {tpriv} torrent {tsour}")
+        for i in range(0, math.ceil(len(tcomm) / width)):
+            print(f"Comm: {tcomm[i * width : (i + 1) * width]} ")
+        print(f'Tracker ' + '-' * (width - 9))
+        for i, url in enumerate(self.torrent.tracker_list):
+            print(eval("f'{i:0" + str(len(self.torrent.tracker_list) // 10 + 1) + "}: {url}'"))
+        # TODO: add the tree-view of files
 
 
     def _load(self):
