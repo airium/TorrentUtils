@@ -1057,30 +1057,6 @@ class Main():
         self.metadata = self.__pickMetadata(args, self.mode)
 
 
-    def __call__(self):
-        if self.mode == 'create':
-            print(f"Creating torrent from '{self.spath}'.")
-            self._set()
-            self.torrent.load(self.spath, False, self.cfg.show_progress)
-            self._write()
-        elif self.mode == 'print':
-            self.torrent.read(self.tpath)
-            self.torrent.print()
-        elif self.mode == 'verify':
-            print(f"Verifying torrent against files")
-            print(f"T: '{self.tpath}'")
-            print(f"F: '{self.spath}'")
-            self.torrent.read(self.tpath)
-            self.torrent.verify(self.spath)
-        elif self.mode == 'modify':
-            print(f"Modifying torrent metadata")
-            self.torrent.read(self.spath)
-            self._set()
-            self._write()
-        else:
-            raise ValueError(f'Invalid mode: {mode}.')
-
-
     @staticmethod
     def __pickCliCfg(args):
         cfg = namedtuple('CFG', '     show_prompt       show_progress       with_time_suffix')(
@@ -1208,6 +1184,46 @@ class Main():
         #     print(f'W: Supplied metadata was ignored in `{mode}` mode')
 
         return metadata
+
+
+    def __call__(self):
+        if self.mode == 'create':
+            print(f"Creating torrent from '{self.spath}'.")
+            self._set()
+            self._load()
+            self._write()
+        elif self.mode == 'print':
+            self._read()
+            self._print()
+        elif self.mode == 'verify':
+            print(f"Verifying torrent against files")
+            print(f"T: '{self.tpath}'")
+            print(f"F: '{self.spath}'")
+            self._read()
+            self._verify()
+        elif self.mode == 'modify':
+            print(f"Modifying torrent metadata")
+            self._read()
+            self._set()
+            self._write()
+        else:
+            raise ValueError(f'Invalid mode: {mode}.')
+
+
+    def _print(self):
+        self.torrent.print()
+
+
+    def _load(self):
+        self.torrent.load(self.spath, False, self.cfg.show_progress)
+
+
+    def _read(self):
+        self.torrent.read(self.tpath)
+
+
+    def _verify(self):
+        self.torrent.verify(self.spath)
 
 
     def _set(self):
