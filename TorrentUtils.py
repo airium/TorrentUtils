@@ -25,25 +25,8 @@ SHOW_PROMPT = True # whether to enable prompt to ask user e.g. whether to overwr
 
 
 '''=====================================================================================================================
-private helper functions
+Helper Error Types
 ====================================================================================================================='''
-
-
-def _print(*args, **kwargs):
-    '''scenario dependent `print`'''
-    global INTERACTIVE
-    if INTERACTIVE:
-        print(*args, **kwargs)
-
-
-def _input(*args, **kwargs):
-    '''scenario dependent `input`'''
-    global INTERACTIVE, SHOW_PROMPT
-    if INTERACTIVE:
-        if SHOW_PROMPT:
-            return input(*args, **kwargs)
-        else: # just assume the user is god and right
-            return True
 
 
 class PieceSizeTooSmall(ValueError):
@@ -690,10 +673,7 @@ class Torrent():
             elif key in ('s', 'src', 'source'):
                 self.setSource(value)
             else:
-                if INTERACTIVE:
-                    _print('ignored unknown key: {key}')
-                else:
-                    raise ValueError('unknown key: {key}')
+                    raise ValueError('Unknown key: {key}')
 
 
     def read(self, path, /):
@@ -1153,7 +1133,7 @@ class Main():
                             fpaths[1] if fpaths[1].suffix == '.torrent' else \
                             fpaths[1].parent.joinpath(f"{fpaths[1].name}.torrent")))
                     if spath.is_file() and spath.suffix == '.torrent':
-                        _print('W: You are likely to create torrent from torrent, which may be unexpected.')
+                        print('W: You are likely to create torrent from torrent, which may be unexpected.')
                     if spath == tpath:
                         raise ValueError('Source and torrent path cannot be same.')
                 else:
@@ -1198,7 +1178,7 @@ class Main():
                             fpaths[1] if fpaths[1].suffix == '.torrent' else \
                             fpaths[1].parent.joinpath(f"{fpaths[1].name}.torrent")))
                     if spath == tpath:
-                        _print('W: You are likely to overwrite the old torrent, which may be unexpected.')
+                        print('W: You are likely to overwrite the old torrent, which may be unexpected.')
                 else:
                     raise ValueError(f'`modify` mode expects a valid torrent path, not {fpaths[0]}')
             else:
