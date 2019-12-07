@@ -1059,13 +1059,24 @@ class Main():
 
     def __call__(self):
         if self.mode == 'create':
-            self.create()
+            print(f"Creating torrent from '{self.spath}'.")
+            self._set()
+            self.torrent.load(self.spath, False, self.cfg.show_progress)
+            self._write()
         elif self.mode == 'print':
-            self.print()
+            self.torrent.read(self.tpath)
+            self.torrent.print()
         elif self.mode == 'verify':
-            self.verify()
+            print(f"Verifying torrent against files")
+            print(f"T: '{self.tpath}'")
+            print(f"F: '{self.spath}'")
+            self.torrent.read(self.tpath)
+            self.torrent.verify(self.spath)
         elif self.mode == 'modify':
-            self.modify()
+            print(f"Modifying torrent metadata")
+            self.torrent.read(self.spath)
+            self._set()
+            self._write()
         else:
             raise ValueError(f'Invalid mode: {mode}.')
 
@@ -1230,33 +1241,6 @@ class Main():
             else:
                 print('Terminated.')
                 sys.exit()
-
-
-    def create(self):
-        print(f"Creating torrent from '{self.spath}'.")
-        self._set()
-        self.torrent.load(self.spath, False, self.cfg.show_progress)
-        self._write()
-
-
-    def print(self):
-        self.torrent.read(self.tpath)
-        self.torrent.print()
-
-
-    def verify(self):
-        print(f"Verifying torrent against files")
-        print(f"T: '{self.tpath}'")
-        print(f"F: '{self.spath}'")
-        self.torrent.read(self.tpath)
-        self.torrent.verify(self.spath)
-
-
-    def modify(self):
-        print(f"Modifying torrent metadata")
-        self.torrent.read(self.spath)
-        self._set()
-        self._write()
 
 
 
