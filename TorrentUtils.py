@@ -1,5 +1,14 @@
-import re
+from __future__ import print_function, absolute_import
+
 import sys
+if sys.version_info < (3, 8):
+    if __name__ == '__main__':
+        print('Python 3.8 or above is required, not {}.{}.{}.'.format(*sys.version_info))
+        input('Press ENTER to exit.')
+    else:
+        raise RuntimeError('Python version too low, required 3.8 or above.')
+
+import re
 import math
 import time
 import codecs
@@ -33,36 +42,38 @@ class PieceSizeUncommon(ValueError):
 
 
 '''=====================================================================================================================
-public helper functions
+Public Helper Functions
 ====================================================================================================================='''
 
 
-def bencode(obj, enc:str='utf-8') -> bytes:
-    '''Bencode objects. Modified from <https://github.com/utdemir/bencoder>'''
-    tobj = type(obj)
-    if tobj is bytes:
+def bencode(obj, enc:str='UTF-8') -> bytes:
+    '''Bencode objects. Modified from <https://github.com/utdemir/bencoder>.'''
+
+    if isinstance(obj, bytes):
         ret = str(len(obj)).encode(enc) + b":" + obj
-    elif tobj is str:
+    elif isinstance(obj, str):
         ret = bencode(obj.encode(enc))
-    elif tobj is int:
+    elif isinstance(obj, int):
         ret = b"i" + str(obj).encode(enc) + b"e"
-    elif tobj in (list, tuple):
+    elif isinstance(obj, (list, tuple)):
         ret = b"l" + b"".join(map(partial(bencode, enc=enc), obj)) + b"e"
-    elif tobj is dict:
+    elif isinstance(obj, dict):
         ret = b'd'
         for key, val in sorted(obj.items()):
-            if type(key) in (bytes, str):
+            if isinstance(key, (bytes, str)):
                 ret += bencode(key, enc) + bencode(val, enc)
             else:
-                raise ValueError(f"expect str or bytes, not {key}:{type(key)}")
+                raise TypeError(f"expect str or bytes, not {key}:{type(key)}")
         ret += b'e'
     else:
-        raise ValueError(f'expect int, bytes, list or dict; not {obj}:{tobj}')
+        raise TypeError(f'expect int, bytes, list or dict; not {obj}:{type(obj)}')
+
     return ret
 
 
 def bdecode(s:(bytes, str), encoding='ascii'):
-    '''Bdecode bytes. Modified from <https://github.com/utdemir/bencoder>'''
+    '''Bdecode bytes. Modified from <https://github.com/utdemir/bencoder>.'''
+
     def decode_first(s):
         if s.startswith(b"i"):
             match = re.match(b"i(-?\\d+)e", s)
@@ -92,14 +103,21 @@ def bdecode(s:(bytes, str), encoding='ascii'):
     ret, rest = decode_first(s)
     if rest:
         raise ValueError("Malformed input.")
+
     return ret
 
 
 def fromTorrent(path):
-    '''wrapper function to create the torrent object from a torrent file'''
-    assert pathlib.Path(path).is_file(), f'Expect an existing file, but \'{path}\' not'
+    '''Wrapper function to read a torrent file and return it.'''
     torrent = Torrent()
-    torrent.read(path)
+    torrent.read(pathlib.Path(path))
+    return torrent
+
+
+def fromFiles(path):
+    '''Wrapper function to load files as a torrent and return it.'''
+    torrent = Torrent()
+    torrent.load(pathlib.Path(path))
     return torrent
 
 
@@ -120,7 +138,6 @@ class Sha1():
             assert len(sha1) % 20 == 0, f'bad sha1 bytes length: {len(sha1)}'
             sha1 = sha1.hex()
         self._sha1 = sha1 if sha1 else ''
-        self._len = 0
 
 
     def __repr__(self):
@@ -676,7 +693,7 @@ class Torrent():
         torrent_dict = bdecode(pathlib.Path(path).read_bytes())
 
         # we need to know encoding first
-        encoding = torrent_dict.get(b'encoding', b'utf-8').decode()                 # str
+        encoding = torrent_dict.get(b'encoding', b'UTF-8').decode()                 # str
         # tracker list requires deduplication
         trackers = [torrent_dict[b'announce']] if torrent_dict.get(b'announce') else []
         trackers += list(chain(*torrent_dict[b'announce-list'])) if torrent_dict.get(b'announce-list') else []
