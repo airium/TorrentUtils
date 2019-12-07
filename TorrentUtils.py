@@ -1,4 +1,5 @@
 import re
+import sys
 import math
 import time
 import codecs
@@ -44,6 +45,12 @@ def _input(*args, **kwargs):
         else: # just assume the user is god and right
             return True
 
+
+class PieceSizeTooSmall(ValueError):
+    pass
+
+class PieceSizeUncommon(ValueError):
+    pass
 
 
 
@@ -585,7 +592,7 @@ class Torrent():
         self.setName(name)
 
 
-    def setPieceLength(self, size, /):
+    def setPieceLength(self, size, no_check=False):
         '''Set torrent piece size
         Note that changing piece size to a different value will clear existing torrent piece hash
         Under interactive scenario, it may prompt to ask the user when the new piece size looks strange:
@@ -593,32 +600,23 @@ class Torrent():
         2. the piece size is beyond the range [256KiB, 32MiB]
 
         Argument:
-        size: the new piece size, that can be converted to `int`
+        size: int, the piece size in bytes
+        no_check: bool=False, whether to allow uncommon piece size
         '''
         size = int(size)
-        if size == self._piece_size_int:
-            return None # we have nothing to do
+        no_check = bool(no_check)
+        if size == self._piece_size_int: # we have nothing to do
+            return
 
         if size < 16384: # piece size must be larger than 16KiB
-            if INTERACTIVE:
-                _print('piece size smaller than 16KiB is not allowed')
-                _print(f'Piece size not changed, still {self._piece_size_int>>10} KiB')
-            else: # raise error when used as lib
-                raise ValueError('piece size must be larger than 16KiB')
-
-        if (math.log2(size / 262144) % 1) or (size < 262144) or (size > 33554432) and INTERACTIVE:
-            if 'y' != _input(f'The piece size {size >> 10} KiB is UNCOMMON.\n'
-                            'Confirm? (enter y to CONFIRM or anything else to cancel): '):
-                _print(f'Piece size not changed, still {self._piece_size_int>>10} KiB')
-                return None
-
-        if size != self._piece_size_int:
-            if self._content_sha1.hex:
-                print('Piece hash cleared')
-            self._content_sha1.clear() # changing piece size will clear existing hash
-
+            raise PieceSizeTooSmall()
+        if (not no_check) and ((math.log2(size / 262144) % 1) or (size < 262144) or (size > 33554432)):
+            raise PieceSizeUncommon()
+        if size != self._piece_size_int: # changing piece size will clear existing hash
+            self._content_sha1.clear()
 
         self._piece_size_int = size
+
 
     @piece_length.setter
     def piece_length(self, size):
@@ -1231,6 +1229,23 @@ class Main():
         return metadata
 
 
+    def _set(self):
+        try:
+            self.torrent.set(**self.metadata)
+        except PieceSizeTooSmall as e:
+            raise ValueError(f"Piece size must be larger than 16KiB, not {self.metadata['piece_size'] >> 10} bytes.")
+        except PieceSizeUncommon as e:
+            if (not self.cfg.show_prompt) or \
+               input(f"I: The piece size {self.metadata['piece_size'] >> 10} KiB is UNCOMMON.\n"
+                      "Confirm? (enter Y/y to CONFIRM, or anything else to cancel): ").lower() == 'y':
+                self.torrent.setPieceLength(self.metadata['piece_size'], no_check=True)
+                self.metadata.pop('piece_size')
+                self.torrent.set(**self.metadata)
+            else:
+                print(f'Terminated.')
+                sys.exit()
+
+
     def _write(self):
         fpath = self.tpath.with_suffix(f'{"." + time.strftime("%y%m%d-%H%M%S") if self.cfg.with_time_suffix else ""}.torrent')
         try:
@@ -1243,13 +1258,14 @@ class Main():
                     self.torrent.write(fpath, overwrite=True)
                     print(f"Torrent saved to '{fpath}' (overwritten).")
             else:
-                print('Cancelled')
+                print('Terminated.')
+                sys.exit()
 
 
     def create(self):
         print(f"Creating torrent from '{self.spath}'.")
+        self._set()
         self.torrent.load(self.spath, False, self.cfg.show_progress)
-        self.torrent.set(**self.metadata)
         self._write()
 
 
@@ -1269,7 +1285,7 @@ class Main():
     def modify(self):
         print(f"Modifying torrent metadata")
         self.torrent.read(self.spath)
-        self.torrent.set(**self.metadata)
+        self._set()
         self._write()
 
 
