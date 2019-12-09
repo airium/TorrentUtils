@@ -131,21 +131,16 @@ Helper Class
 class Sha1():
 
 
-    def __init__(self, sha1=None, /):
-        if isinstance(sha1, str):
-            assert len(sha1) % 40 == 0, f'bad sha1 str length: {len(sha1)}'
-        if isinstance(sha1, bytes):
-            assert len(sha1) % 20 == 0, f'bad sha1 bytes length: {len(sha1)}'
-            sha1 = sha1.hex()
-        self._sha1 = sha1 if sha1 else ''
+    def __init__(self, sha1=None, add=None, join=None):
+        self._sha1 = []
 
-
-    def __repr__(self):
-        return self._sha1
-
-
-    def __str__(self):
-        return self._sha1
+        if bool(add) and bool(join):
+            raise ValueError('`add` and `join` arguments cannot be supplied simultaneously.')
+        if sha1 and (not isinstance(sha1, Sha1)):
+            raise TypeError(f"Expect Sha1 object, not {type(sha1)}.")
+        if sha1: self._sha1 = sha1._sha1
+        if add: self.add(add)
+        if join: self.join(join)
 
 
     def __bool__(self):
@@ -153,54 +148,55 @@ class Sha1():
 
 
     def __len__(self):
-        return len(self._sha1) // 40
+        return len(self._sha1)
 
 
     def __getitem__(self, key):
         if isinstance(key, int):
-            ret = self._sha1[40 * key : 40 * key + 40]
+            ret = self._sha1[key]
         elif isinstance(key, slice):
-            assert key.step == 1, f'Sha1 object only support step=1, not {key.step}'
-            ret = self._sha1[40 * key.start : 40 * key.stop]
+            if key.step == 1:
+                ret = ''.join(self._sha1[key.start : key.stop])
+            else:
+                raise ValueError(f"Sha1 object only support step=1, not {key.step}")
         return ret
 
 
     @property
-    def hex(self):
-        return self._sha1
+    def digest(self):
+        return b''.join(self._sha1)
 
 
     @property
-    def hexB(self):
-        return bytes.fromhex(self._sha1)
+    def hexdigest(self):
+        return b''.join(self._sha1).hex()
 
 
-    def append(self, sha1, /):
-        if isinstance(sha1, str):
-            assert len(sha1) % 40 == 0, f'bad sha1 str length: {len(sha1)}'
-        if isinstance(sha1, bytes):
-            assert len(sha1) % 20 == 0, f'bad sha1 bytes length: {len(sha1)}'
-            sha1 = sha1.hex()
-        self._sha1 += sha1
+    def add(self, bchars):
+        '''Calculate and append sha1 from bytes or an iterable of bytes.'''
+        bchars = [bchars] if isinstance(bchars, bytes) else list(bchars)
+        self._sha1 += list(map(self.hash, bchars))
+
+
+    def join(self, bchars):
+        '''Append sha1 from bytes or an iterable of bytes.'''
+        bchars = bchars if isinstance(bchars, bytes) else b''.join(bchars)
+        if len(bchars) % 20:
+            raise ValueError('The length of bytes input is not a multiple of 20.')
+        self._sha1 += [bchars[i:i+20] for i in range(0, len(bchars), 20)]
 
 
     def clear(self):
-        self._sha1 = ''
+        '''Clear current hash list.'''
+        self._sha1 = []
 
 
     @staticmethod
-    def hash(bchars:bytes, /) -> str:
-        '''Return the sha1 hash in hex str for the given bytes'''
-        assert isinstance(bchars, bytes), f'expect bytes, not {bchars.__class__.__name__}'
+    def hash(bchars:bytes, /) -> bytes:
+        '''Return the sha1 hash for the given bytes.'''
         sha1_hasher = hashlib.sha1()
         sha1_hasher.update(bchars)
-        return sha1_hasher.hexdigest()
-
-
-    @staticmethod
-    def hashB(bchars:bytes, /) -> bytes:
-        '''Return the sha1 hash in hex bytes for the given bytes'''
-        return bytes.fromhex(Sha1.hash(bchars))
+        return sha1_hasher.digest()
 
 
 
@@ -313,7 +309,7 @@ class Torrent():
     @property
     def pieces(self) -> str:
         '''The sha1 hash of pieces. Read-only.'''
-        return self._content_sha1.hex
+        return self._content_sha1.digest
 
 
     @property
@@ -360,7 +356,7 @@ class Torrent():
     @property
     def num_pieces(self) -> int:
         '''The total number of pieces within the torrnet'''
-        return self.content_size // self.piece_length + 1
+        return len(self._content_sha1)
 
 
     @property
@@ -378,7 +374,7 @@ class Torrent():
         if self.piece_length:
             info_dict[b'piece length'] = self.piece_length
         if self.pieces:
-            info_dict[b'pieces'] = bytes.fromhex(self.pieces)
+            info_dict[b'pieces'] = self.pieces
         if self.private:
             info_dict[b'private'] = self.private
         if self.source:
@@ -417,7 +413,7 @@ class Torrent():
     @property
     def hash(self) -> str:
         '''Return the torrent hash at the moment. Read-only.'''
-        return Sha1.hash(bencode(self.info_dict))
+        return Sha1.hash(bencode(self.info_dict)).hex()
 
 
     @property
@@ -707,7 +703,7 @@ class Torrent():
         length = torrent_dict.get(b'info').get(b'length', 0)                        # int
         name = torrent_dict.get(b'info').get(b'name', b'').decode(encoding)         # str
         piece_length = torrent_dict.get(b'info').get(b'piece length', 0)            # int
-        pieces = torrent_dict.get(b'info').get(b'pieces', b'').hex()                # str
+        pieces = torrent_dict.get(b'info').get(b'pieces', b'')                      # str
         private = torrent_dict.get(b'info').get(b'private', 0)                      # int
         source = torrent_dict.get(b'info').get(b'source', b'').decode(encoding)     # str
 
@@ -733,7 +729,7 @@ class Torrent():
         self._torrent_name_str = name
         self._piece_size_int = piece_length
         self._private_int = private
-        self._content_sha1 = Sha1(pieces)
+        self._content_sha1 = Sha1(join=pieces)
         self._source_str = source
 
 
@@ -803,7 +799,7 @@ class Torrent():
         fsize_list = [fpath.stat().st_size for fpath in fpaths]
         if sum(fsize_list):
             if show_progress: # TODO: stdout is dirty in core class method and should be moved out
-                sha1_str = str()
+                sha1 = Sha1()
                 piece_bytes = bytes()
                 pbar = tqdm.tqdm(total=sum(fsize_list), unit='B', unit_scale=True)
                 for fpath in fpaths:
@@ -811,22 +807,22 @@ class Torrent():
                         while (read_bytes := fobj.read(self.piece_length - len(piece_bytes))):
                             piece_bytes += read_bytes
                             if len(piece_bytes) == self.piece_length:
-                                sha1_str += Sha1.hash(piece_bytes)
+                                sha1.add(piece_bytes)
                                 piece_bytes = bytes()
                             pbar.update(len(read_bytes))
-                sha1_str += Sha1.hash(piece_bytes) if piece_bytes else b''
+                sha1.add(piece_bytes)
                 pbar.close()
             else: # not show progress bar
-                sha1_str = str()
+                sha1 = Sha1()
                 piece_bytes = bytes()
                 for fpath in fpaths:
                     with fpath.open('rb') as fobj:
                         while (read_bytes := fobj.read(self.piece_length - len(piece_bytes))):
                             piece_bytes += read_bytes
                             if len(piece_bytes) == self.piece_length:
-                                sha1_str += Sha1.hash(piece_bytes)
+                                sha1.add(piece_bytes)
                                 piece_bytes = bytes()
-                sha1_str += Sha1.hash(piece_bytes) if piece_bytes else b''
+                sha1.add(piece_bytes)
         else:
             raise ValueError(f"The source path '{spath.absolute()}' has a total size of 0")
 
@@ -834,7 +830,7 @@ class Torrent():
         self.name = self.name if keep_name else spath.name
         self._content_fpath_list = fpath_list
         self._content_fsize_list = fsize_list
-        self._content_sha1 = Sha1(sha1_str)
+        self._content_sha1 = sha1
 
 
 
