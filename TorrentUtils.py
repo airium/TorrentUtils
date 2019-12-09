@@ -1,14 +1,5 @@
-from __future__ import print_function, absolute_import
-
-import sys
-if sys.version_info < (3, 8):
-    if __name__ == '__main__':
-        print('Python 3.8 or above is required, not {}.{}.{}.'.format(*sys.version_info))
-        input('Press ENTER to exit.')
-    else:
-        raise RuntimeError('Python version too low, required 3.8 or above.')
-
 import re
+import sys
 import math
 import time
 import codecs
