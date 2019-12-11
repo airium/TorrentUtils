@@ -27,8 +27,10 @@ Helper Error Types
 class PieceSizeTooSmall(ValueError):
     pass
 
+
 class PieceSizeUncommon(ValueError):
     pass
+
 
 
 
@@ -54,10 +56,10 @@ def bencode(obj, enc:str='UTF-8') -> bytes:
             if isinstance(key, (bytes, str)):
                 ret += bencode(key, enc) + bencode(val, enc)
             else:
-                raise TypeError(f"expect str or bytes, not {key}:{type(key)}")
+                raise TypeError(f"Expect str or bytes, not {key}:{type(key)}.")
         ret += b'e'
     else:
-        raise TypeError(f'expect int, bytes, list or dict; not {obj}:{type(obj)}')
+        raise TypeError(f"Expect int, bytes, list or dict; not {obj}:{type(obj)}.")
 
     return ret
 
@@ -149,7 +151,7 @@ class Sha1():
             if key.step == 1:
                 ret = ''.join(self._sha1[key.start : key.stop])
             else:
-                raise ValueError(f"Sha1 object only support step=1, not {key.step}")
+                raise ValueError(f"Sha1 object only support step=1, not {key.step}.")
         return ret
 
 
@@ -193,7 +195,7 @@ class Sha1():
 
 
 '''=====================================================================================================================
-Core Class
+Core Torrent Class
 ====================================================================================================================='''
 
 
@@ -410,13 +412,13 @@ class Torrent():
     @property
     def magnet(self) -> str:
         '''Return the magnet string of the torrent. Read-only.'''
-        ret = f'magnet:?xt=urn:btih:{self.hash}'
+        ret = f"magnet:?xt=urn:btih:{self.hash}"
         if self.name:
-            ret += f'&dn={urllib.parse.quote(self.name)}'
+            ret += f"&dn={urllib.parse.quote(self.name)}"
         if self.content_size:
-            ret += f'&xl={self.content_size}'
+            ret += f"&xl={self.content_size}"
         for url in self.tracker_list:
-            ret += f'&tr={urllib.parse.quote(url)}'
+            ret += f"&tr={urllib.parse.quote(url)}"
         return ret
 
 
@@ -467,7 +469,7 @@ class Torrent():
 
     @announce.setter
     def announce(self, url):
-        assert isinstance(url, str), f'expect str, not {url.__class__.__name__}'
+        assert isinstance(url, str), f"expect str, not {url.__class__.__name__}"
         self.setTracker([url] + self.announce_list)
 
     @announce_list.setter
@@ -536,7 +538,7 @@ class Torrent():
         elif len(t) == 9:
             self._datesec_int = int(time.mktime(tuple(date)))
         else:
-            raise ValueError('supplied date is not understood')
+            raise ValueError('Supplied date is not understood.')
 
     @creation_date.setter
     def creation_date(self, date):
@@ -552,7 +554,7 @@ class Torrent():
         try:
             codecs.lookup(enc)
         except LookupError:
-            raise LookupError(f'unknown encoding: {enc}')
+            raise LookupError(f"Unknown encoding: {enc}.")
         else:
             self._encoding_str = enc # respect the encoding str supplied by user
 
@@ -564,9 +566,9 @@ class Torrent():
     def setName(self, name, /):
         name = str(name)
         if not name:
-            raise ValueError('name must not be empty')
+            raise ValueError('Name must not be empty.')
         if not all([False if (char in name) else True for char in r'\/:*?"<>|' ]):
-            raise ValueError('invalid torrent name')
+            raise ValueError('Invalid torrent name.')
         self._torrent_name_str = name
 
     @name.setter
@@ -672,7 +674,7 @@ class Torrent():
             elif key in ('s', 'src', 'source'):
                 self.setSource(value)
             else:
-                    raise ValueError('Unknown key: {key}')
+                raise ValueError(f"Unknown key: {key}.")
 
 
     def read(self, path, /):
@@ -815,7 +817,7 @@ class Torrent():
                                 piece_bytes = bytes()
                 sha1.add(piece_bytes)
         else:
-            raise ValueError(f"The source path '{spath.absolute()}' has a total size of 0")
+            raise ValueError(f"The source path '{spath.absolute()}' has a total size of 0.")
 
         # Everything looks good, let's update internal parameters
         self.name = self.name if keep_name else spath.name
@@ -836,7 +838,7 @@ class Torrent():
         '''
         tpath = pathlib.Path(tpath)
         overwrite = bool(overwrite)
-        assert self.isValid(), f'the torrent is not ready to be saved: {self.whyInvalid()}'
+        assert self.isValid(), f"the torrent is not ready to be saved: {self.whyInvalid()}"
 
         fpath = tpath.joinpath(f"{self.name}.torrent") if tpath.is_dir() else tpath
         if fpath.is_file() and not overwrite:
@@ -852,19 +854,19 @@ class Torrent():
         '''Return the reason why the torrent is not ready to be saved'''
         ret = []
         if not self.name:
-            ret.append('torrent name has not been set')
+            ret.append('Torrent name has not been set.')
         if not self.file_list:
-            ret.append('there is no content file in the torrent')
+            ret.append('There is no content file in the torrent.')
         if not self.piece_length:
-            ret.append('piece size cannot be 0')
+            ret.append('Piece size cannot be 0.')
         if self.piece_length * (self.num_pieces - 1) > self.content_size:
-            ret.append('too many pieces for content size')
+            ret.append('Too many pieces for content size.')
         if self.piece_length * self.num_pieces < self.content_size:
-            ret.append('too less pieces for content size')
+            ret.append('Too less pieces for content size.')
         try:
             bencode(self.torrent_dict)
         except Exception as e:
-            ret.append(f'torrent bencoding failed ({e})')
+            ret.append(f"Torrent bencoding failed ({e}).")
         return ret
 
 
@@ -886,7 +888,7 @@ class Torrent():
         assert self.isValid(), 'torrent is not ready for file/piece locating'
         st = int(start) if start else 0
         ed = int(end) if end else self.content_size
-        assert 0 <= st < ed <= self.content_size, f'invalid interval'
+        assert 0 <= st < ed <= self.content_size, f"invalid interval"
 
         fparts = pathlib.Path(path).parts
         fst = fed = 0
@@ -898,7 +900,7 @@ class Torrent():
                 return fst, fed
             if fst >= ed: # the file has left the interval
                 break
-        raise ValueError('file not found')
+        raise ValueError('File not found.')
 
 
     def whichPieceP(self, path, start=None, end=None):
@@ -914,7 +916,7 @@ class Torrent():
         assert self.isValid(), 'torrent is not ready for file/piece locating'
         st = int(start) if start else 0
         ed = int(end) if end else self.num_pieces
-        assert 0 <= st < ed <= self.num_pieces, f'invalid interval'
+        assert 0 <= st < ed <= self.num_pieces, 'invalid interval'
 
         return list(s // self.piece_length for s in self.whichPieceB(path, st * self.piece_length, ed * self.piece_length))
 
@@ -929,7 +931,7 @@ class Torrent():
         assert self.isValid(), 'torrent is not ready for file/piece locating'
         st = int(start)
         ed = int(end) + 1
-        assert 0 <= st < ed <= self.content_size, f'invalid interval'
+        assert 0 <= st < ed <= self.content_size, 'invalid interval'
 
         ret = []
         fst = fed = 0
@@ -955,7 +957,7 @@ class Torrent():
         assert self.isValid(), 'torrent is not ready for file/piece locating'
         st = int(start)
         ed = int(end) if end else st + 1
-        assert 0 <= st < ed <= self.num_pieces, f'invalid interval'
+        assert 0 <= st < ed <= self.num_pieces, 'invalid interval'
 
         return self.whichFileB(st * self.piece_length, ed * self.piece_length)
 
@@ -1010,7 +1012,7 @@ class Torrent():
 
 
 '''=====================================================================================================================
-CLI functions
+CLI Class
 ====================================================================================================================='''
 
 
@@ -1059,7 +1061,7 @@ class Main():
         elif len(fpaths) == 2 and fpaths[1].is_file() and fpaths[1].suffix.lower() == '.torrent':
             ret = 'verify'
         else:
-            raise ValueError('Failed to infer working mode')
+            raise ValueError('Failed to infer working mode.')
 
         return ret
 
@@ -1097,9 +1099,9 @@ class Main():
                 if fpaths[0].is_file() and fpaths[0].suffix == '.torrent':
                     tpath = fpaths[0]
                 else:
-                    raise FileNotFoundError(f'`print` mode expects a valid torrent path, not {fpaths[0]}.')
+                    raise FileNotFoundError(f"`print` mode expects a valid torrent path, not {fpaths[0]}.")
             else:
-                raise ValueError(f'`print` mode expects exactly 1 path, not {len(fpaths)}.')
+                raise ValueError(f"`print` mode expects exactly 1 path, not {len(fpaths)}.")
 
         # `verify` mode requires exactly 2 paths
         # the first path must be an existing spath
@@ -1111,9 +1113,9 @@ class Main():
                     spath = fpaths[0]
                     tpath = fpaths[1]
                 else:
-                    raise ValueError(f'`verify` mode expects a pair of valid source and torrent paths, but not found.')
+                    raise ValueError('`verify` mode expects a pair of valid source and torrent paths, but not found.')
             else:
-                raise ValueError(f'`verify` mode expects exactly 2 paths, not {len(fpaths)}.')
+                raise ValueError(f"`verify` mode expects exactly 2 paths, not {len(fpaths)}.")
 
         # `modify` mode requires 1 or 2 paths
         # the first path must be an existing path to the torrent you'd like to edit, denoted as spath
@@ -1129,12 +1131,12 @@ class Main():
                     if spath == tpath:
                         print('W: You are likely to overwrite the old torrent, which may be unexpected.')
                 else:
-                    raise ValueError(f'`modify` mode expects a valid torrent path, not {fpaths[0]}')
+                    raise ValueError(f"`modify` mode expects a valid torrent path, not {fpaths[0]}.")
             else:
-                raise ValueError(f'`modify` mode expects 1 or 2 paths, not {len(fpaths)}')
+                raise ValueError(f"`modify` mode expects 1 or 2 paths, not {len(fpaths)}.")
 
         else:
-            raise ValueError('Failed to sort paths for torrent and content')
+            raise ValueError('Failed to sort paths for source and torrent.')
 
         return tpath, spath
 
@@ -1168,34 +1170,34 @@ class Main():
             self._read()
             self._print()
         elif self.mode == 'verify':
-            print(f"Verifying torrent against files")
+            print('Verifying Source files with Torrent files.')
+            print(f"S: '{self.spath}'")
             print(f"T: '{self.tpath}'")
-            print(f"F: '{self.spath}'")
             self._read()
             self._verify()
         elif self.mode == 'modify':
-            print(f"Modifying torrent metadata")
+            print(f"Modifying torrent '{self.spath}'")
             self._read()
             self._set()
             self._write()
         else:
-            raise ValueError(f'Invalid mode: {mode}.')
+            raise ValueError(f"Invalid mode: {mode}.")
 
 
     def _print(self):
         tname = self.torrent.name
-        tsize = f'{self.torrent.torrent_size:,} Bytes'
+        tsize = f"{self.torrent.torrent_size:,} Bytes"
         tencd = self.torrent.encoding
         thash = self.torrent.hash
-        fsize = f'{self.torrent.content_size:,} Bytes'
-        fnum = f'{len(self.torrent.file_list)} File' + 's' if len(self.torrent.file_list) > 1 else ''
+        fsize = f"{self.torrent.content_size:,} Bytes"
+        fnum = f"{len(self.torrent.file_list)} File" + 's' if len(self.torrent.file_list) > 1 else ''
         psize = self.torrent.piece_length >> 10
         pnum = self.torrent.num_pieces
         tdate = time.strftime('%Y/%m/%d %H:%M:%S', time.localtime(self.torrent.creation_date)) if self.torrent.creation_date \
                 else '----/--/-- --:--:--'
         tfrom = self.torrent.created_by if self.torrent.created_by else '------------'
         tpriv = 'Private' if self.torrent.private else 'Public'
-        tsour = f'from {self.torrent.source}' if self.torrent.source else ''
+        tsour = f"from {self.torrent.source}" if self.torrent.source else ''
         tcomm = self.torrent.comment
 
         width = shutil.get_terminal_size()[0]
@@ -1240,12 +1242,12 @@ class Main():
                 self.metadata.pop('piece_size')
                 self.torrent.set(**self.metadata)
             else:
-                print(f'Terminated.')
+                print('Terminated.')
                 sys.exit()
 
 
     def _write(self):
-        fpath = self.tpath.with_suffix(f'{"." + time.strftime("%y%m%d-%H%M%S") if self.cfg.with_time_suffix else ""}.torrent')
+        fpath = self.tpath.with_suffix(f"{'.' + time.strftime('%y%m%d-%H%M%S') if self.cfg.with_time_suffix else ''}.torrent")
         try:
             self.torrent.write(fpath, overwrite=False)
             print(f"Torrent saved to '{fpath}'.")
@@ -1263,7 +1265,7 @@ class Main():
 
 
 '''=====================================================================================================================
-cli interface
+CLI Interface
 ====================================================================================================================='''
 
 
@@ -1291,7 +1293,7 @@ if __name__ == '__main__':
     parser.add_argument('-t', '--tracker', action='extend', nargs='+', dest='tracker_list', type=str,
                         help='can be specified multiple times', metavar='url')
     parser.add_argument('-s', '--piece-size', dest='piece_size', default=4096, type=int,
-                        help='piece size in KiB (default: 16384)', metavar='number')
+                        help='piece size in KiB (default: 4096)', metavar='number')
     parser.add_argument('-c', '--comment', dest='comment', type=str,
                         help='the message displayed in various clients', metavar='text')
     parser.add_argument('-p', '--private', choices={0, 1}, type=int,
@@ -1304,12 +1306,11 @@ if __name__ == '__main__':
                         help='customise `source` message (will change torrent hash)', metavar='text')
     parser.add_argument('--encoding', dest='encoding', default='UTF-8', type=str,
                         help='customise encoding for filenames (default: UTF-8)', metavar='text')
-    parser.add_argument('-y', '--yes', '--no-prompt', action='store_false', dest='show_prompt',
-                        help='don\'t prompt the user with any interactive question')
-    parser.add_argument('--no-time-suffix', action='store_false', dest='with_time_suffix',
-                        help='don\'t include the current time in new torrent\'s name')
-    parser.add_argument('--no-progress', action='store_false', dest='show_progress',
-                        help='don\'t display the progress bar in creating torrent')
-    parser.add_argument('--version', action='version', version='%(prog)s 0.9')
+    parser.add_argument('--time-suffix', action='store_true', dest='with_time_suffix',
+                        help='insert time between torrent filename and extension')
+    parser.add_argument('--progress', action='store_true', dest='show_progress',
+                        help='show progress bar during creating torrent')
+    parser.add_argument('-y', '--yes', action='store_false', dest='show_prompt',
+                        help='just say yes - don\'t ask any question')
 
     Main(parser.parse_args())()
