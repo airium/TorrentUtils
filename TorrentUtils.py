@@ -437,7 +437,7 @@ class Torrent():
         '''
         urls = [urls] if isinstance(urls, str) else list(urls)
         if top:
-            for url in urls.reverse():
+            for url in urls[::-1]:
                 try:
                     idx = self._tracker_list.index(url)
                 except ValueError: # not found, add it
@@ -639,7 +639,7 @@ class Torrent():
             tracker: t, tr, tracker, trackers, trackerlist, announce, announces, announcelist
             comment: c, comm, comment, comments
             creator: b, by, createdby, creator, tool, creatingtool
-            date: d, date, time, second, seconds
+            date: d, date, time, second, seconds, creationdate, creationtime, creatingdate, creatingtime
             encoding: e, enc, encoding, codec
             name: n, name, torrentname
             piece size: ps, pl, piecesize, piecelength
@@ -659,7 +659,7 @@ class Torrent():
                 self.setComment(value)
             elif key in ('b', 'by', 'createdby', 'creator', 'tool', 'creatingtool'):
                 self.setCreator(value)
-            elif key in ('d', 'date', 'time', 'second', 'seconds'):
+            elif key in ('d', 'date', 'time', 'second', 'seconds', 'creationdate', 'creationtime', 'creatingdate', 'creatingtime'):
                 self.setDate(value)
             elif key in ('e', 'enc', 'encoding', 'codec'):
                 self.setEncoding(value)
@@ -701,11 +701,17 @@ class Torrent():
         source = torrent_dict.get(b'info').get(b'source', b'').decode(encoding)     # str
 
         # everything looks good, now let's write attributes
-        self._tracker_list = trackers
-        self._comment_str = comment
-        self._creator_str = created_by
-        self._datesec_int = creation_date
-        self._encoding_str = encoding
+        self.setTracker(trackers);
+        self.setComment(comment);
+        self.setCreator(created_by)
+        self.setDate(creation_date)
+        self.setEncoding(encoding)
+        self.setName(name)
+        self.setPieceLength(piece_length, no_check=True)
+        self.setPrivate(private)
+        self.setSource(source)
+
+        self._content_sha1 = Sha1(join=pieces)
         if length and not files:
             self._content_fpath_list = [pathlib.Path('.')]
             self._content_fsize_list = [length]
@@ -718,12 +724,7 @@ class Torrent():
             self._content_fsize_list = fsize_list
             self._content_fpath_list = fpath_list
         else:
-            raise ValueError('')
-        self._torrent_name_str = name
-        self._piece_size_int = piece_length
-        self._private_int = private
-        self._content_sha1 = Sha1(join=pieces)
-        self._source_str = source
+            raise ValueError('Unexpected error in reading torrent.')
 
 
     def readMetadata(self, path, /, include_key={}, exclude_key={'source'}):
@@ -1069,7 +1070,7 @@ class Main():
     @staticmethod
     def __sortPath(fpaths, mode):
         '''Based on the working mode, sort out the most proper paths for torrent and content.'''
-        spath = None # Content PATH is the path to the files specified by a torrent
+        spath = None # Source PATH is the path to the files specified by a torrent
         tpath = None # Torrent PATH is the path to the torrent itself
 
         # `create` mode requires 1 or 2 paths
@@ -1129,7 +1130,7 @@ class Main():
                             fpaths[1] if fpaths[1].suffix == '.torrent' else \
                             fpaths[1].parent.joinpath(f"{fpaths[1].name}.torrent")))
                     if spath == tpath:
-                        print('W: You are likely to overwrite the old torrent, which may be unexpected.')
+                        print('W: You are likely to overwrite the source torrent, which may be unexpected.')
                 else:
                     raise ValueError(f"`modify` mode expects a valid torrent path, not {fpaths[0]}.")
             else:
@@ -1141,21 +1142,40 @@ class Main():
         return tpath, spath
 
 
-    @staticmethod
-    def __pickMetadata(args, mode):
+    def __pickMetadata(self, args, mode):
         metadata = dict()
 
-        if mode in ('create', 'modify'):
+        if mode == 'create':
+            metadata['tracker_list'] = args.tracker_list if args.tracker_list else []
+            metadata['comment'] = args.comment if args.comment else ''
+            metadata['created_by'] = args.created_by if args.created_by else 'TorrentUtils'
+            metadata['creation_date'] = args.creation_date if args.creation_date else int(time.time())
+            metadata['encoding'] = args.encoding if args.encoding else 'UTF-8'
+            metadata['piece_size'] = args.piece_size << 10 if args.piece_size else 4096 << 10 # B -> KiB
+            metadata['private'] = args.private if args.private else 0
+            metadata['source'] = args.source if args.source else ''
+
+        elif mode == 'modify':
             if args.tracker_list: metadata['tracker_list'] = args.tracker_list
             if args.comment: metadata['comment'] = args.comment
-            if args.creation_tool: metadata['creator'] = args.creation_tool
-            if args.creation_time: metadata['date'] = args.creation_time
+            if args.created_by: metadata['created_by'] = args.created_by
+            if args.creation_date: metadata['creation_date'] = args.creation_date
             if args.encoding: metadata['encoding'] = args.encoding
-            if args.piece_size: metadata['piece_size'] = args.piece_size << 10 # cli input is in KiB, we need Bytes
+            if args.piece_size:
+                print('E: Changing piece size is NOT allowed in `modify` mode.\nTerminated.')
+                sys.exit()
             if args.private: metadata['private'] = args.private
             if args.source: metadata['source'] = args.source
-        # else:
-        #     print(f'W: Supplied metadata was ignored in `{mode}` mode')
+
+        else: # `print` or `verify`
+            if args.tracker_list: print(f"W: supplied tracker has not use in {mode} mode.")
+            if args.comment: print(f"W: supplied comment has not use in {mode} mode.")
+            if args.created_by: print(f"W: supplied creator has not use in {mode} mode.")
+            if args.creation_date: print(f"W: supplied time has not use in {mode} mode.")
+            if args.encoding: print(f"W: supplied encoding has not use in {mode} mode.")
+            if args.piece_size: print(f"W: supplied piece size has not use in {mode} mode.")
+            if args.private: print(f"W: supplied private attribute has not use in {mode} mode.")
+            if args.source: print(f"W: supplied source has not use in {mode} mode.")
 
         return metadata
 
@@ -1176,7 +1196,7 @@ class Main():
             self._read()
             self._verify()
         elif self.mode == 'modify':
-            print(f"Modifying torrent '{self.spath}'")
+            print(f"Modifying torrent '{self.spath}'.")
             self._read()
             self._set()
             self._write()
@@ -1222,8 +1242,13 @@ class Main():
 
 
     def _read(self):
-        self.torrent.read(self.tpath)
-
+        if self.mode == 'verify':
+            self.torrent.read(self.tpath)
+        elif self.mode == 'modify':
+            self.torrent.read(self.spath)
+        else:
+            print(f"Unexpected {self.mode} mode for read operation.\nTerminated.")
+            sys.exit()
 
     def _verify(self):
         self.torrent.verify(self.spath)
@@ -1286,31 +1311,31 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(prog='TorrentUtils', formatter_class=lambda prog: _CustomHelpFormatter(prog))
 
-    parser.add_argument('fpaths', nargs='*', type=pathlib.Path,
+    parser.add_argument('fpaths', type=pathlib.Path, nargs='*',
                         help='1 or 2 paths depending on mode', metavar='path')
-    parser.add_argument('-m', '--mode', choices=('create', 'print', 'verify', 'modify'), default='',
+    parser.add_argument('-m', '--mode', dest='mode', choices=('create', 'print', 'verify', 'modify'),
                         help='will be guessed from paths if not specified')
-    parser.add_argument('-t', '--tracker', action='extend', nargs='+', dest='tracker_list', type=str,
+    parser.add_argument('-t', '--tracker', dest='tracker_list', type=str, action='extend', nargs='+',
                         help='can be specified multiple times', metavar='url')
-    parser.add_argument('-s', '--piece-size', dest='piece_size', default=4096, type=int,
+    parser.add_argument('-s', '--piece-size', dest='piece_size', type=int,
                         help='piece size in KiB (default: 4096)', metavar='number')
     parser.add_argument('-c', '--comment', dest='comment', type=str,
                         help='the message displayed in various clients', metavar='text')
-    parser.add_argument('-p', '--private', choices={0, 1}, type=int,
+    parser.add_argument('-p', '--private', dest='private', type=int, choices={0, 1},
                         help='private torrent if 1 (default: 0)')
-    parser.add_argument('--tool', dest='creation_tool', default='TorrentUtils', type=str,
+    parser.add_argument('--by', dest='created_by', type=str,
                         help='customise `created by` message (default: TorrentUtils)', metavar='text')
-    parser.add_argument('--time', dest='creation_time', default=int(time.time()), type=int,
+    parser.add_argument('--time', dest='creation_date', type=int,
                         help='customise the second since 19700101 (default: now)', metavar='number')
     parser.add_argument('--source', dest='source', type=str,
                         help='customise `source` message (will change torrent hash)', metavar='text')
-    parser.add_argument('--encoding', dest='encoding', default='UTF-8', type=str,
+    parser.add_argument('--encoding', dest='encoding', type=str,
                         help='customise encoding for filenames (default: UTF-8)', metavar='text')
-    parser.add_argument('--time-suffix', action='store_true', dest='with_time_suffix',
+    parser.add_argument('--time-suffix', dest='with_time_suffix', action='store_true',
                         help='insert time between torrent filename and extension')
-    parser.add_argument('--progress', action='store_true', dest='show_progress',
+    parser.add_argument('--progress', dest='show_progress', action='store_true',
                         help='show progress bar during creating torrent')
-    parser.add_argument('-y', '--yes', action='store_false', dest='show_prompt',
+    parser.add_argument('-y', '--yes', dest='show_prompt', action='store_false',
                         help='just say yes - don\'t ask any question')
 
     Main(parser.parse_args())()
