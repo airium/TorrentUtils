@@ -1156,26 +1156,26 @@ class Main():
             metadata['source'] = args.source if args.source else ''
 
         elif mode == 'modify':
-            if args.tracker_list: metadata['tracker_list'] = args.tracker_list
-            if args.comment: metadata['comment'] = args.comment
-            if args.created_by: metadata['created_by'] = args.created_by
-            if args.creation_date: metadata['creation_date'] = args.creation_date
-            if args.encoding: metadata['encoding'] = args.encoding
-            if args.piece_size:
+            if not (args.tracker_list is None): metadata['tracker_list'] = args.tracker_list
+            if not (args.comment is None): metadata['comment'] = args.comment
+            if not (args.created_by is None): metadata['created_by'] = args.created_by
+            if not (args.creation_date is None): metadata['creation_date'] = args.creation_date
+            if not (args.encoding is None): metadata['encoding'] = args.encoding
+            if not (args.piece_size is None):
                 print('E: Changing piece size is NOT allowed in `modify` mode.\nTerminated.')
                 sys.exit()
-            if args.private: metadata['private'] = args.private
-            if args.source: metadata['source'] = args.source
+            if not (args.private is None): metadata['private'] = args.private
+            if not (args.source is None): metadata['source'] = args.source
 
         else: # `print` or `verify`
-            if args.tracker_list: print(f"W: supplied tracker has not use in {mode} mode.")
-            if args.comment: print(f"W: supplied comment has not use in {mode} mode.")
-            if args.created_by: print(f"W: supplied creator has not use in {mode} mode.")
-            if args.creation_date: print(f"W: supplied time has not use in {mode} mode.")
-            if args.encoding: print(f"W: supplied encoding has not use in {mode} mode.")
-            if args.piece_size: print(f"W: supplied piece size has not use in {mode} mode.")
-            if args.private: print(f"W: supplied private attribute has not use in {mode} mode.")
-            if args.source: print(f"W: supplied source has not use in {mode} mode.")
+            if not (args.tracker_list is None): print(f"W: supplied tracker has not use in {mode} mode.")
+            if not (args.comment is None): print(f"W: supplied comment has not use in {mode} mode.")
+            if not (args.created_by is None): print(f"W: supplied creator has not use in {mode} mode.")
+            if not (args.creation_date is None): print(f"W: supplied time has not use in {mode} mode.")
+            if not (args.encoding is None): print(f"W: supplied encoding has not use in {mode} mode.")
+            if not (args.piece_size is None): print(f"W: supplied piece size has not use in {mode} mode.")
+            if not (args.private is None): print(f"W: supplied private attribute has not use in {mode} mode.")
+            if not (args.source is None): print(f"W: supplied source has not use in {mode} mode.")
 
         return metadata
 
@@ -1337,5 +1337,5 @@ if __name__ == '__main__':
                         help='show progress bar during creating torrent')
     parser.add_argument('-y', '--yes', dest='show_prompt', action='store_false',
                         help='just say yes - don\'t ask any question')
-
+    input(parser.parse_args()); input()
     Main(parser.parse_args())()
