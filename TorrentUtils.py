@@ -399,7 +399,7 @@ class Torrent():
         torrent_dict[b'info'] = self.info_dict
 
         # additional key to store the original hash
-        torrent_dict[b'hash'] = Sha1.hash(bencode(torrent_dict[b'info']))
+        torrent_dict[b'hash'] = self.hash
 
         return torrent_dict
 
