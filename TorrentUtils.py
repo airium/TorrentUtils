@@ -1119,6 +1119,9 @@ class Main():
                 if fpaths[0].exists() and fpaths[1].is_file() and fpaths[1].suffix == '.torrent':
                     spath = fpaths[0]
                     tpath = fpaths[1]
+                elif fpaths[1].exists() and fpaths[0].is_file() and fpaths[0].suffix == '.torrent':
+                    spath = fpaths[1]
+                    tpath = fpaths[0]
                 else:
                     raise ValueError('`verify` mode expects a pair of valid source and torrent paths, but not found.')
             else:
