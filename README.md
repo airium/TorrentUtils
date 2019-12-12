@@ -32,33 +32,37 @@ optional arguments:
   --time number                            customise the second since 19700101 (default: now)
   --source text                            customise `source` message (will change torrent hash)
   --encoding text                          customise encoding for filenames (default: UTF-8)
-  --json path                              user-defined json providing metadata presets
+  --json path                              user-defined json providing metadata preset
   --time-suffix                            insert time between torrent filename and extension
   --progress                               show progress bar during creating torrent
   -y, --yes                                just say yes - don't ask any question
 ```
 
-## TODOs
+## TODOs and status
+
+1. Complete the print functionality
+2. Complete the verify functionality and various locators
 
 ### Core
 
-- [x] **print** torrent information
-- [x] **create** new torrent
-- [x] **verify** files against a torrent
-- [x] support various torrent **metadata**
+- [x] minimal torrent functionality
+- [x] common torrent metadata
+- [x] read/write torrent file read
+- [x] load (rebuild) from source files
+- [ ] verify source files with torrent
 
 ### CLI
 
-- [x] **print** mode to display torrent information
-- [x] **create** mode to create a torrent with
-- [x] **modify** mode to edit torrent metadata
-- [x] **verify** mode to check file integrity against the torrent
+- [ ] **print** torrent information
+- [x] **create** new torrent from source files, with json preset loader
+- [x] **modify** torrent metadata
+- [ ] **verify** source files with torrent
 
 ### GUI Drag-Drop (inherit CLI)
 
-- [x] **print** torrent information by dropping a single torrent file
-- [x] **create** a torrent by dropping a single non-torrent file/dir
-- [x] **verify** files against a torrent by dropping a file/dir and a torrent
+- [x] print torrent information by dropping a torrent file
+- [x] create a torrent by dropping a non-torrent file/dir, with json preset auto-loading
+- [ ] verify source files with torrent by dropping a file/dir and a torrent
 
 ## Thanks to
 
