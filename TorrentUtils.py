@@ -1385,7 +1385,7 @@ if __name__ == '__main__':
     parser.add_argument('--encoding', dest='encoding', type=str,
                         help='customise encoding for filenames (default: UTF-8)', metavar='text')
     parser.add_argument('--json', dest='json', type=pathlib.Path,
-                        help='a json config file providing default values', metavar='path')
+                        help='user-defined json providing metadata presets', metavar='path')
     parser.add_argument('--time-suffix', dest='with_time_suffix', action='store_true',
                         help='insert time between torrent filename and extension')
     parser.add_argument('--progress', dest='show_progress', action='store_true',

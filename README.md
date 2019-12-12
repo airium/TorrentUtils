@@ -15,7 +15,7 @@ tqdm (optional, for progress bar)
 $ python38 TorrentUtils.py -h
 usage: TorrentUtils [-h] [-m {create,print,verify,modify}] [-t url [url ...]] [-s number] [-c text]
                     [-p {0,1}] [--by text] [--time number] [--source text] [--encoding text]
-                    [--time-suffix] [--progress] [-y]
+                    [--json path] [--time-suffix] [--progress] [-y]
                     [path [path ...]]
 
 positional arguments:
@@ -32,6 +32,7 @@ optional arguments:
   --time number                            customise the second since 19700101 (default: now)
   --source text                            customise `source` message (will change torrent hash)
   --encoding text                          customise encoding for filenames (default: UTF-8)
+  --json path                              user-defined json providing metadata presets
   --time-suffix                            insert time between torrent filename and extension
   --progress                               show progress bar during creating torrent
   -y, --yes                                just say yes - don't ask any question
