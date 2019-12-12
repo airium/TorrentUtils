@@ -2,6 +2,7 @@ import re
 import sys
 import math
 import time
+import json
 import codecs
 import urllib
 import shutil
@@ -1022,14 +1023,17 @@ class Main():
 
     def __init__(self, args):
         self.torrent = Torrent()
+
         # extract cli config from cli arguments
         self.cfg = self.__pickCliCfg(args)
         # if mode is not specified, infer it from the number of supplied paths
-        self.mode = args.mode if args.mode else self.__inferMode(args.fpaths)
+        self.mode = self.__inferMode(args)
         # based on the working mode, pick the most likely torrent and content paths
-        self.tpath, self.spath = self.__sortPath(args.fpaths, self.mode)
+        self.tpath, self.spath = self.__sortPath(args, self.mode)
+        # load json defaults
+        self.metadata = self.__loadJson(args, self.mode)
         # extract metadata from cli arguments
-        self.metadata = self.__pickMetadata(args, self.mode)
+        self.metadata = self.__pickMetadata(args, self.mode, self.metadata)
 
 
     @staticmethod
@@ -1047,29 +1051,31 @@ class Main():
 
 
     @staticmethod
-    def __inferMode(fpaths):
+    def __inferMode(args):
         '''Inferring working mode from the number of paths is limited: some modes cannot be inferred'''
-        ret = None
-
-        if len(fpaths) == 1 and fpaths[0].is_dir():
-            ret = 'create'
-        elif len(fpaths) == 1 and fpaths[0].is_file() and fpaths[0].suffix.lower() != '.torrent':
-            ret = 'create'
-        elif len(fpaths) == 1 and fpaths[0].is_file() and fpaths[0].suffix.lower() == '.torrent':
-            ret = 'print'
-        elif len(fpaths) == 2 and fpaths[0].is_file() and fpaths[0].suffix.lower() == '.torrent':
-            ret = 'verify'
-        elif len(fpaths) == 2 and fpaths[1].is_file() and fpaths[1].suffix.lower() == '.torrent':
-            ret = 'verify'
+        if args.mode:
+            ret = args.mode
         else:
-            raise ValueError('Failed to infer working mode.')
-
+            fpaths = args.fpaths
+            if len(fpaths) == 1 and fpaths[0].is_dir():
+                ret = 'create'
+            elif len(fpaths) == 1 and fpaths[0].is_file() and fpaths[0].suffix.lower() != '.torrent':
+                ret = 'create'
+            elif len(fpaths) == 1 and fpaths[0].is_file() and fpaths[0].suffix.lower() == '.torrent':
+                ret = 'print'
+            elif len(fpaths) == 2 and fpaths[0].is_file() and fpaths[0].suffix.lower() == '.torrent':
+                ret = 'verify'
+            elif len(fpaths) == 2 and fpaths[1].is_file() and fpaths[1].suffix.lower() == '.torrent':
+                ret = 'verify'
+            else:
+                raise ValueError('Failed to infer working mode.')
         return ret
 
 
     @staticmethod
-    def __sortPath(fpaths, mode):
+    def __sortPath(args, mode):
         '''Based on the working mode, sort out the most proper paths for torrent and content.'''
+        fpaths = args.fpaths
         spath = None # Source PATH is the path to the files specified by a torrent
         tpath = None # Torrent PATH is the path to the torrent itself
 
@@ -1142,18 +1148,65 @@ class Main():
         return tpath, spath
 
 
-    def __pickMetadata(self, args, mode):
+    @staticmethod
+    def __loadJson(args, mode):
         metadata = dict()
 
         if mode == 'create':
-            metadata['tracker_list'] = args.tracker_list if args.tracker_list else []
-            metadata['comment'] = args.comment if args.comment else ''
-            metadata['created_by'] = args.created_by if args.created_by else 'TorrentUtils'
-            metadata['creation_date'] = args.creation_date if args.creation_date else int(time.time())
-            metadata['encoding'] = args.encoding if args.encoding else 'UTF-8'
-            metadata['piece_size'] = args.piece_size << 10 if args.piece_size else 4096 << 10 # B -> KiB
-            metadata['private'] = args.private if args.private else 0
-            metadata['source'] = args.source if args.source else ''
+            fpath = args.json if args.json else (
+                    _ if (_ := pathlib.Path(__file__).absolute().with_suffix('.json')).is_file() else None)
+            if fpath:
+                try:
+                    print(f"Loading user presets from '{fpath}'...", end=' ', flush=True)
+                    d = json.loads(fpath.read_bytes())
+                    if d.get('tracker_list') and \
+                    isinstance(d['tracker_list'], list) and all(isinstance(i, str) for i in d['tracker_list']):
+                        metadata['tracker_list'] = d['tracker_list']
+                    if d.get('comment'): metadata['comment'] = str(d['comment'])
+                    if d.get('created_by'): metadata['created_by'] = str(d['created_by'])
+                    if d.get('creation_date'): metadata['creation_date'] = int(d['creation_date'])
+                    if d.get('encoding'): metadata['encoding'] = str(d['encoding'])
+                    if d.get('piece_size'): metadata['piece_size'] = int(d['piece_size']) << 10
+                    if d.get('private'): metadata['private'] = int(d['private'])
+                    if d.get('source'): metadata['source'] = str(d['source'])
+                except FileNotFoundError:
+                    print('failed (file not found)\nTerminated.')
+                    sys.exit()
+                except UnicodeDecodeError:
+                    print('failed (invalid file)\nTerminated.')
+                    sys.exit()
+                except json.decoder.JSONDecodeError:
+                    print('failed (invalid json)\nTerminated.')
+                    sys.exit()
+                except KeyError:
+                    print('failed (missing key)\nTerminated.')
+                    sys.exit()
+                else:
+                    print('succeeded')
+
+        return metadata
+
+
+    @staticmethod
+    def __pickMetadata(args, mode, metadata):
+
+        if mode == 'create':
+            metadata['tracker_list'] = args.tracker_list if args.tracker_list else (
+                                       _ if (_ := metadata.get('tracker_list')) else [])
+            metadata['comment'] = args.comment if args.comment else (
+                                       _ if (_ := metadata.get('comment')) else '')
+            metadata['created_by'] = args.created_by if args.created_by else (
+                                       _ if (_ := metadata.get('created_by')) else 'TorrentUtils')
+            metadata['creation_date'] = args.creation_date if args.creation_date else (
+                                       _ if (_ := metadata.get('creation_date')) else int(time.time()))
+            metadata['encoding'] = args.encoding if args.encoding else (
+                                       _ if (_ := metadata.get('encoding')) else 'UTF-8')
+            metadata['piece_size'] = args.piece_size << 10 if args.piece_size else (
+                                       _ if (_ := metadata.get('piece_size')) else 4096 << 10) # B -> KiB
+            metadata['private'] = args.private if args.private else (
+                                       _ if (_ := metadata.get('private')) else 0)
+            metadata['source'] = args.source if args.source else (
+                                       _ if (_ := metadata.get('source')) else '')
 
         elif mode == 'modify':
             if not (args.tracker_list is None): metadata['tracker_list'] = args.tracker_list
@@ -1162,20 +1215,21 @@ class Main():
             if not (args.creation_date is None): metadata['creation_date'] = args.creation_date
             if not (args.encoding is None): metadata['encoding'] = args.encoding
             if not (args.piece_size is None):
-                print('E: Changing piece size is NOT allowed in `modify` mode.\nTerminated.')
-                sys.exit()
+                print('W: supplied piece size has no effect in `modify` mode.')
+                if 'piece_size' in metadata.keys(): # if piece_size is loaded from json, remove it
+                    metadata.pop('piece_size')
             if not (args.private is None): metadata['private'] = args.private
             if not (args.source is None): metadata['source'] = args.source
 
         else: # `print` or `verify`
-            if not (args.tracker_list is None): print(f"W: supplied tracker has not use in {mode} mode.")
-            if not (args.comment is None): print(f"W: supplied comment has not use in {mode} mode.")
-            if not (args.created_by is None): print(f"W: supplied creator has not use in {mode} mode.")
-            if not (args.creation_date is None): print(f"W: supplied time has not use in {mode} mode.")
-            if not (args.encoding is None): print(f"W: supplied encoding has not use in {mode} mode.")
-            if not (args.piece_size is None): print(f"W: supplied piece size has not use in {mode} mode.")
-            if not (args.private is None): print(f"W: supplied private attribute has not use in {mode} mode.")
-            if not (args.source is None): print(f"W: supplied source has not use in {mode} mode.")
+            if not (args.tracker_list is None): print(f"W: supplied tracker has not effect in {mode} mode.")
+            if not (args.comment is None): print(f"W: supplied comment has not effect in {mode} mode.")
+            if not (args.created_by is None): print(f"W: supplied creator has not effect in {mode} mode.")
+            if not (args.creation_date is None): print(f"W: supplied time has not effect in {mode} mode.")
+            if not (args.encoding is None): print(f"W: supplied encoding has not effect in {mode} mode.")
+            if not (args.piece_size is None): print(f"W: supplied piece size has not effect in {mode} mode.")
+            if not (args.private is None): print(f"W: supplied private attribute has not effect in {mode} mode.")
+            if not (args.source is None): print(f"W: supplied source has not effect in {mode} mode.")
 
         return metadata
 
@@ -1250,6 +1304,7 @@ class Main():
             print(f"Unexpected {self.mode} mode for read operation.\nTerminated.")
             sys.exit()
 
+
     def _verify(self):
         self.torrent.verify(self.spath)
 
@@ -1261,8 +1316,7 @@ class Main():
             raise ValueError(f"Piece size must be larger than 16KiB, not {self.metadata['piece_size'] >> 10} bytes.")
         except PieceSizeUncommon as e:
             if (not self.cfg.show_prompt) or \
-               input(f"I: The piece size {self.metadata['piece_size'] >> 10} KiB is UNCOMMON.\n"
-                      "Confirm? (enter Y/y to CONFIRM, or anything else to cancel): ").lower() == 'y':
+               input(f"Uncommon piece size {self.metadata['piece_size'] << 10} KiB. Confirm? (y/N): ").lower() == 'y':
                 self.torrent.setPieceLength(self.metadata['piece_size'], no_check=True)
                 self.metadata.pop('piece_size')
                 self.torrent.set(**self.metadata)
@@ -1278,8 +1332,7 @@ class Main():
             print(f"Torrent saved to '{fpath}'.")
         except FileExistsError as e:
             if (not self.cfg.show_prompt) or \
-               input(f"The target '{fpath}' already exists.\n"
-                     f"Overwrite? (Y/y to OVERWRITE, or anything else to cancel): ").lower() == 'y':
+               input(f"The target '{fpath}' already exists. Overwrite? (y/N): ").lower() == 'y':
                     self.torrent.write(fpath, overwrite=True)
                     print(f"Torrent saved to '{fpath}' (overwritten).")
             else:
@@ -1331,11 +1384,13 @@ if __name__ == '__main__':
                         help='customise `source` message (will change torrent hash)', metavar='text')
     parser.add_argument('--encoding', dest='encoding', type=str,
                         help='customise encoding for filenames (default: UTF-8)', metavar='text')
+    parser.add_argument('--json', dest='json', type=pathlib.Path,
+                        help='a json config file providing default values', metavar='path')
     parser.add_argument('--time-suffix', dest='with_time_suffix', action='store_true',
                         help='insert time between torrent filename and extension')
     parser.add_argument('--progress', dest='show_progress', action='store_true',
                         help='show progress bar during creating torrent')
     parser.add_argument('-y', '--yes', dest='show_prompt', action='store_false',
                         help='just say yes - don\'t ask any question')
-    input(parser.parse_args()); input()
+
     Main(parser.parse_args())()
