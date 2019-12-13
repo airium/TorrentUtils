@@ -1218,33 +1218,45 @@ class Main():
     def _print(self):
         tname = self.torrent.name
         tsize = f"{self.torrent.torrent_size:,} Bytes"
-        tencd = self.torrent.encoding
+        tencd = f", {self.torrent.encoding}" if self.torrent.encoding else ''
         thash = self.torrent.hash
         fsize = f"{self.torrent.size:,} Bytes"
-        fnum = f"{len(self.torrent.file_list)} File" + 's' if len(self.torrent.file_list) > 1 else ''
+        fnum = f"{len(self.torrent.file_list)} File" + ('s' if len(self.torrent.file_list) > 1 else '')
         psize = self.torrent.piece_length >> 10
         pnum = self.torrent.num_pieces
-        tdate = time.strftime('%Y/%m/%d %H:%M:%S', time.localtime(self.torrent.creation_date)) if self.torrent.creation_date \
-                else '----/--/-- --:--:--'
-        tfrom = self.torrent.created_by if self.torrent.created_by else '------------'
+        tdate = time.strftime('%Y/%m/%d %H:%M:%S', time.localtime(self.torrent.creation_date)) \
+                if self.torrent.creation_date else ''
+        tfrom = self.torrent.created_by if self.torrent.created_by else ''
         tpriv = 'Private' if self.torrent.private else 'Public'
-        tsour = f"from {self.torrent.source}" if self.torrent.source else ''
+        tsour = f"by {self.torrent.source}" if self.torrent.source else ''
         tcomm = self.torrent.comment
+
+        trnum = math.ceil(math.log10(len(self.torrent.tracker_list))) if self.torrent.tracker_list else 0
 
         width = shutil.get_terminal_size()[0]
 
-        print(f'Info ' + '-' * (width - 6))
+        print(f'General Info ' + '-' * (width - 14))
         print(f"Name: {tname}")
-        print(f"File: {tsize}, {tencd}")
+        print(f"File: {tsize}{tencd}")
         print(f"Hash: {thash}")
         print(f"Size: {fsize}, {fnum}, {psize} KiB x {pnum} Pieces")
-        print(f"Time: {tdate} by {tfrom}")
+        if tdate and tfrom:
+            print(f"Time: {tdate} by {tfrom}")
+        elif tdata:
+            print(f"Time: {tdate}")
+        elif tfrom:
+            print(f"From: {tdate}")
+        if tcomm:
+            print(f"Comm: {tcomm}")
         print(f"Else: {tpriv} torrent {tsour}")
-        for i in range(0, math.ceil(len(tcomm) / width)):
-            print(f"Comm: {tcomm[i * width : (i + 1) * width]} ")
-        print(f'Tracker ' + '-' * (width - 9))
-        for i, url in enumerate(self.torrent.tracker_list):
-            print(eval("f'{i:0" + str(len(self.torrent.tracker_list) // 10 + 1) + "}: {url}'"))
+
+        print(f'Tracker Urls ' + '-' * (width - 14))
+        if self.torrent.tracker_list:
+            for i, url in enumerate(self.torrent.tracker_list, start=1):
+                print(eval("f'{i:0>" + str(trnum) + "}: {url}'"))
+        else:
+            print('No tracker')
+
         # TODO: add the tree-view of files
 
 
@@ -1253,7 +1265,7 @@ class Main():
 
 
     def _read(self):
-        if self.mode == 'verify':
+        if self.mode in ('verify', 'print'):
             self.torrent.read(self.tpath)
         elif self.mode == 'modify':
             self.torrent.read(self.spath)
