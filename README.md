@@ -1,6 +1,8 @@
 # TorrentUtils
 
-> The project is still under active early development. Do not use until this message disappears.
+**All major functions should work now.**
+**You're welcome to try and post bug reports.**
+**API and CLI are still subject to change.**
 
 ## Prerequisite
 
@@ -37,32 +39,36 @@ optional arguments:
   --progress                               show progress bar during creating torrent
   -y, --yes                                just say yes - don't ask any question
 ```
+---
 
 ## TODOs and status
 
-1. Complete the print functionality
-2. Complete the verify functionality and various locators
+1. Implement a tree-view for CLI print functionality.
+2. Implement the progress bar for creating and verifying torrent outside of core class.
+3. Implement multi-process for faster torrent creating with mp shared memory.
 
-### Core
+### Core API
 
 - [x] minimal torrent functionality
 - [x] common torrent metadata
-- [x] read/write torrent file read
+- [x] read/write torrent file
 - [x] load (rebuild) from source files
-- [ ] verify source files with torrent
+- [x] verify source files with torrent
 
 ### CLI
 
-- [ ] **print** torrent information
+- [x] **print** torrent information
 - [x] **create** new torrent from source files, with json preset loader
 - [x] **modify** torrent metadata
-- [ ] **verify** source files with torrent
+- [x] **verify** source files with torrent
 
 ### GUI Drag-Drop (inherit CLI)
 
 - [x] print torrent information by dropping a torrent file
 - [x] create a torrent by dropping a non-torrent file/dir, with json preset auto-loading
-- [ ] verify source files with torrent by dropping a file/dir and a torrent
+- [x] verify source files with torrent by dropping a non-torrent file/dir and a torrent
+
+---
 
 ## Thanks to
 
