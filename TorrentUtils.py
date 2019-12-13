@@ -798,7 +798,8 @@ class Torrent():
         '''
         tpath = pathlib.Path(tpath)
         overwrite = bool(overwrite)
-        assert self.isValid(), f"The torrent is not ready to be saved: {self.whyInvalid()}."
+        if (error := self.check()):
+            raise TorrentNotReadyError(f"The torrent is not ready to be saved: {error}.")
 
         fpath = tpath.joinpath(f"{self.name}.torrent") if tpath.is_dir() else tpath
         if fpath.is_file() and not overwrite:
@@ -818,7 +819,8 @@ class Torrent():
         The piece index from 0 that failed to hash
         '''
         dest = pathlib.Path(dest)
-        assert self.isValid(), 'internal status is not ready to be verified'
+        if (error := self.check()):
+            raise TorrentNotReadyError(f"The torrent is not ready for verification.")
         assert dest.exists(), 'the verification target does not exists'
 
         piece_bytes = bytes()
@@ -858,20 +860,19 @@ class Torrent():
     -----------------------------------------------------------------------------------------------------------------'''
 
 
-    def isValid(self):
-        '''Check if current status is a complete and eligible torrent.'''
-        return False if self.whyInvalid() else True
-
-
-    def whyInvalid(self):
-        '''Return the reasons why the torrent is not ready to be saved.'''
+    def check(self):
+        '''Return the problems within the torrent.'''
         ret = []
         if not self.name:
             ret.append('Torrent name has not been set.')
-        if not self.file_list:
-            ret.append('There is no content file in the torrent.')
         if not self.piece_length:
             ret.append('Piece size cannot be 0.')
+        if not self.file_list:
+            ret.append('There is no source file within the torrent.')
+        if not self.pieces:
+            ret.append('Piece hash is empty.')
+        if not self.size:
+            ret.append('Torrent size is 0.')
         if self.piece_length * (self.num_pieces - 1) > self.size:
             ret.append('Too many pieces for content size.')
         if self.piece_length * self.num_pieces < self.size:
@@ -897,7 +898,7 @@ class Torrent():
         '''
         fparts = pathlib.Path(path).parts
         num = int(num) if int(num) > 0 else 0
-        if not self.isValid():
+        if self.check():
             raise TorrentNotReadyError('Torrent is not ready to for indexing.')
 
         ret = []
@@ -917,8 +918,8 @@ class Torrent():
 
     def __getitem__(self, key):
         '''Given piece index, return files associated with it.'''
-        if not self.isValid():
-            raise TorrentNotReadyError('Torrent is not ready to for indexing.')
+        if self.check():
+            raise TorrentNotReadyError('Torrent is not ready to for item getter.')
 
         if isinstance(key, int):
             lsize = self.piece_length * (key if key >= 0 else self.num_pieces + key)
