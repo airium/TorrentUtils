@@ -1,4 +1,5 @@
 import re
+import os
 import sys
 import math
 import time
@@ -13,7 +14,7 @@ import warnings
 import argparse
 
 from operator import methodcaller
-from itertools import chain
+from itertools import repeat, chain
 from functools import partial
 from collections import namedtuple
 
@@ -23,6 +24,10 @@ from collections import namedtuple
 '''=====================================================================================================================
 Helper Error Types
 ====================================================================================================================='''
+
+
+class TorrentNotReadyError(Exception):
+    pass
 
 
 class PieceSizeTooSmall(ValueError):
@@ -878,93 +883,69 @@ class Torrent():
         return ret
 
 
-    def whichPieceB(self, path, start=None, end=None):
-        '''Return the bytes shift and size for the first found file that matches the filename.
+    def index(self, path, /, num=1):
+        '''Given filename, return its piece index.
 
         Arguments:
-        filename: the filename to find. Can be a single path or
-            Parts of the filename are matched backward. e.g. 'b/c' will match 'a/b/c' instead of 'b/c/a'.
-        start: optional, the shift in bytes to start search, default=0
-        end: optional, the shift in bytes to stop search, default=self.size
-            Note that once the file has an intersection with the interval (start, end), the file will be found
-        '''
-        assert self.isValid(), 'torrent is not ready for file/piece locating'
-        st = int(start) if start else 0
-        ed = int(end) if end else self.size
-        assert 0 <= st < ed <= self.size, f"invalid interval"
+        filename: str, the filename to find.
+            Path parts are matched backward. e.g. 'b/c' will match 'a/b/c' instead of 'b/c/a'.
+        num: int=1, stop search when this number of files are found (find all when num <= 0).
 
+        Return:
+        A list of 3-element tuple of (path, start-index, end-index)
+            Indexed in python style, from 0 to len-1, and [m, n+1] for items from m to n
+        '''
         fparts = pathlib.Path(path).parts
-        fst = fed = 0
-        for fsize, fpath in self.file_list:
-            fst, fed = fed, fed + fsize
-            if fed <= st: # the file has not enter the interval
-                continue
-            if fed > st and fst < ed and fpath[-len(fparts):] == fparts:
-                return fst, fed
-            if fst >= ed: # the file has left the interval
-                break
-        raise ValueError('File not found.')
-
-
-    def whichPieceP(self, path, start=None, end=None):
-        '''Return the piece shift and size for the first found file that matches the filename.
-
-        Arguments:
-        filename: the filename to find. Can be a single path or
-            Parts of the filename are matched backward. e.g. 'b/c' will match 'a/b/c' instead of 'b/c/a'.
-        start: optional, the shift in bytes to start search, default=0
-        end: optional, the shift in bytes to stop search, default=self.num_piece
-            Note that once the file has an intersection with the interval (start, end), the file will be found
-        '''
-        assert self.isValid(), 'torrent is not ready for file/piece locating'
-        st = int(start) if start else 0
-        ed = int(end) if end else self.num_pieces
-        assert 0 <= st < ed <= self.num_pieces, 'invalid interval'
-
-        return list(s // self.piece_length for s in self.whichPieceB(path, st * self.piece_length, ed * self.piece_length))
-
-
-    def whichFileB(self, start, end) -> list:
-        '''Return the file list between bytes shift [start, end], indexed from 0
-
-        Argument:
-        start: the size shift in bytes to start search
-        end: optional, the size shift in bytes to end search, default=start+1
-        '''
-        assert self.isValid(), 'torrent is not ready for file/piece locating'
-        st = int(start)
-        ed = int(end) + 1
-        assert 0 <= st < ed <= self.size, 'invalid interval'
+        num = int(num) if int(num) > 0 else 0
+        if not self.isValid():
+            raise TorrentNotReadyError('Torrent is not ready to for indexing.')
 
         ret = []
-        fst = fed = 0
+        loaded_size = 0
         for fsize, fpath in self.file_list:
-            fst, fed = fed, fed + fsize
-            if fed <= st: # the file has not enter the interval
-                continue
-            if fed > st and fst < ed: # the file has intersection with the interval
-                ret.append(fpath)
-            if fst >= ed: # the file has left the interval
-                break
+            n_shorter = min(len(fpath), len(fparts))
+            if fpath[:-n_shorter-1:-1] == fparts[:-n_shorter-1:-1]:
+                ret.append([os.path.join(self.name, *fpath),
+                            math.floor(loaded_size / self.piece_length),
+                            math.ceil((loaded_size + fsize) / self.piece_length)])
+                if (num := num - 1) == 0:
+                    break
+            loaded_size += fsize
 
         return ret
 
 
-    def whichFileP(self, start, end=None) -> list:
-        '''Return the file list between piece shift [start, end], indexed from 0
+    def __getitem__(self, key):
+        '''Given piece index, return files associated with it.'''
+        if not self.isValid():
+            raise TorrentNotReadyError('Torrent is not ready to for indexing.')
 
-        Argument:
-        start: the size shift in pieces to start search
-        end: optional, the size shift in pieces to end search, default=start+1
-        '''
-        assert self.isValid(), 'torrent is not ready for file/piece locating'
-        st = int(start)
-        ed = int(end) if end else st + 1
-        assert 0 <= st < ed <= self.num_pieces, 'invalid interval'
+        if isinstance(key, int):
+            lsize = self.piece_length * (key if key >= 0 else self.num_pieces + key)
+            hsize = lsize + self.piece_length
+        elif isinstance(key, slice):
+            if key.step in (1, None):
+                lsize = self.piece_length * (key.start if key.start >= 0 else self.num_pieces + key.start)
+                hsize = self.piece_length * (key.stop if key.stop >= 0 else self.num_pieces + key.stop)
+            else:
+                raise ValueError(f"Piece index step must be 1, not {key.step}.")
+        else:
+            raise TypeError(f"Expect int or slice, not {key.__class__}.")
 
-        return self.whichFileB(st * self.piece_length, ed * self.piece_length)
+        ret = []
 
+        if lsize >= hsize or lsize >= self.size:
+            return ret
 
+        size = 0
+        for fsize, fpath in self.file_list:
+            size += fsize
+            if size > lsize:
+                ret.append(os.path.join(self.name, *fpath))
+            if size >= hsize:
+                break
+
+        return ret
 
 
 '''=====================================================================================================================
