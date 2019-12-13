@@ -1389,7 +1389,7 @@ if __name__ == '__main__':
 
     # sys.argv = ['TorrentUtils.py', r"Z:\test", r"Z:\test.torrent"]
 
-    parser = argparse.ArgumentParser(prog='TorrentUtils', formatter_class=lambda prog: _CustomHelpFormatter(prog))
+    parser = argparse.ArgumentParser(prog='tu', formatter_class=lambda prog: _CustomHelpFormatter(prog))
 
     parser.add_argument('fpaths', type=pathlib.Path, nargs='*',
                         help='1 or 2 paths depending on mode', metavar='path')
