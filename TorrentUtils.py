@@ -1220,6 +1220,9 @@ class Main():
         else:
             raise ValueError(f"Invalid mode: {mode}.")
 
+        print();
+        input('Press ENTER to exit...')
+
 
     def _print(self):
         tname = self.torrent.name
