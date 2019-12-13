@@ -347,6 +347,12 @@ class Torrent():
 
 
     @property
+    def num_files(self) -> int:
+        '''Return the total number of files within the torrent. Read-only.'''
+        return len(self.file_list)
+
+
+    @property
     def info_dict(self) -> dict:
         '''Return the `info` dict of the torrent that affects hash. Read-only.'''
         info_dict = {}
@@ -809,25 +815,43 @@ class Torrent():
             fpath.write_bytes(bencode(self.torrent_dict))
 
 
-    def verify(self, dest):
-        '''Verify if the actual files match existing hash list.
+    def verify(self, spath):
+        '''Verify external source files with the internal torrent.
 
         Argument:
-        dest: the path to actual files
+        path: the path to source files.
 
         Return:
         The piece index from 0 that failed to hash
         '''
-        dest = pathlib.Path(dest)
+        spath = pathlib.Path(spath)
+        if not spath.exists():
+            raise FileNotFoundError(f"The source path '{spath}' does not exist.")
         if (error := self.check()):
             raise TorrentNotReadyError(f"The torrent is not ready for verification.")
-        assert dest.exists(), 'the verification target does not exists'
+
+        if self.num_files == 1:
+            if spath.is_file() and spath.name == self.name:
+                spath = spath
+            elif spath.is_dir():
+                raise IsADirectoryError(f"Expect a single file, not a directory '{spath}'.")
+            else:
+                raise RuntimeError('Unexpected Error.')
+        elif self.num_files > 1:
+            if spath.is_file():
+                raise NotADirectoryError(f"Expect a directory, not a single file '{spath}'.")
+            elif spath.is_dir() and spath.name == self.name:
+                spath = spath
+            else:
+                raise RuntimeError('Unexpected Error.')
+        else:
+            raise RuntimeError('Unexpected Error.')
 
         piece_bytes = bytes()
         piece_idx = 0
         piece_error_list = []
         for fsize, fpath in self.file_list:
-            dest_fpath = dest.joinpath(*fpath)
+            dest_fpath = spath.joinpath(*fpath)
             if dest_fpath.is_file():
                 read_quota = min(fsize, dest_fpath.stat().st_size) # we only need to load the smaller file size
                 with dest_fpath.open('rb') as dest_fobj:
@@ -844,12 +868,12 @@ class Torrent():
                             break
             else: # the file does not exist
                 size = len(piece_bytes) + fsize
-                n_empty_piece, piece_empty_shift = divmod(size, self.piece_length)
-                piece_bytes = (b'' if size >= self.piece_length else piece_bytes) + b'\0' * piece_empty_shift
+                n_empty_piece, piece_blank_shift = divmod(size, self.piece_length)
+                piece_bytes = b'\0' * piece_blank_shift # it should be OK to just replace existing piece_bytes by \0
                 for _ in range(n_empty_piece):
                     piece_error_list.append(piece_idx)
                     piece_idx += 1
-        if piece_bytes and hash(piece_bytes) != self.pieces[piece_idx]: # remainder
+        if piece_bytes and hash(piece_bytes) != self.pieces[20 * piece_idx : 20 * piece_idx + 20]: # remainder
             piece_error_list.append(piece_idx)
 
         return piece_error_list
@@ -1183,7 +1207,7 @@ class Main():
             self._read()
             self._print()
         elif self.mode == 'verify':
-            print('Verifying Source files with Torrent files.')
+            print('Verifying Source files with Torrent.')
             print(f"S: '{self.spath}'")
             print(f"T: '{self.tpath}'")
             self._read()
@@ -1257,8 +1281,55 @@ class Main():
 
 
     def _verify(self):
-        self.torrent.verify(self.spath)
+        spath = self.spath
+        tname = self.torrent.name
 
+        if self.torrent.num_files == 1:
+            if spath.is_file() and spath.name == tname:
+                spath = self.spath
+            elif spath.is_dir():
+                if pathlib.Path(tname) in spath.iterdir() and (tmp := spath.joinpath(tname)).is_file():
+                    spath = tmp
+                else:
+                    print(f"E: The source file '{spath}' was not found.\nTerminated.")
+                    sys.exit()
+        elif self.torrent.num_files > 1:
+            if spath.is_file():
+                print(f"E: The source directory '{spath}' was not found.\nTerminated.")
+                sys.exit()
+            elif spath.is_dir():
+                if spath.name == tname:
+                    spath = spath
+                elif pathlib.Path(tname) in spath.iterdir() and (tmp := spath.joinpath(self.name)).is_dir():
+                    spath = tmp
+                else:
+                    print(f"E: The source directory '{spath}' was not found.\nTerminated.")
+                    sys.exit()
+
+        piece_broken_list = self.torrent.verify(spath)
+        ptotal = self.torrent.num_pieces
+        pbroken = len(piece_broken_list)
+        ppassed = ptotal - pbroken
+
+
+        files_broken_list = [self.torrent[i] for i in piece_broken_list]
+        files_broken_list = list(dict.fromkeys(chain(*files_broken_list)))
+        ftotal = self.torrent.num_files
+        fbroken = len(files_broken_list)
+        fpassed = ftotal - fbroken
+
+        print('Processing...')
+        print(f"Piece: {ptotal:>10d} total = {ppassed:>10d} passed + {pbroken:>10d} missing or broken")
+        print(f"Files: {ftotal:>10d} total = {fpassed:>10d} passed + {fbroken:>10d} missing or broken")
+        if files_broken_list:
+            print('Files missing or broken:')
+            for i, fpath in enumerate(files_broken_list):
+                print(spath.parent.joinpath(fpath))
+                if i == 49:
+                    if fbroken > 50:
+                        print('Truncated at 50 files - too many potential missing or broken files.')
+                    break
+            print('\nI: Some files may be in fact OK but cannot be verified as their neighbour files failed.')
 
     def _set(self):
         try:
@@ -1312,6 +1383,8 @@ class _CustomHelpFormatter(argparse.HelpFormatter):
 
 
 if __name__ == '__main__':
+
+    # sys.argv = ['TorrentUtils.py', r"Z:\test", r"Z:\test.torrent"]
 
     parser = argparse.ArgumentParser(prog='TorrentUtils', formatter_class=lambda prog: _CustomHelpFormatter(prog))
 
