@@ -337,7 +337,7 @@ class Torrent():
     @property
     def torrent_size(self) -> int:
         '''Return the size of the torrent file itself (not source files). Read-only.'''
-        return len(bencode(self.torrent_dict))
+        return len(bencode(self.torrent_dict, self.encoding))
 
 
     @property
@@ -406,7 +406,7 @@ class Torrent():
     @property
     def hash(self) -> str:
         '''Return the torrent hash at the moment. Read-only.'''
-        return hash(bencode(self.info_dict)).hex()
+        return hash(bencode(self.info_dict, self.encoding)).hex()
 
 
     @property
@@ -812,7 +812,7 @@ class Torrent():
             raise FileExistsError(f"The target '{fpath}' already exists.")
         else:
             fpath.parent.mkdir(parents=True, exist_ok=True)
-            fpath.write_bytes(bencode(self.torrent_dict))
+            fpath.write_bytes(bencode(self.torrent_dict, self.encoding))
 
 
     def verify(self, spath):
@@ -902,7 +902,11 @@ class Torrent():
         if self.piece_length * self.num_pieces < self.size:
             ret.append('Too less pieces for content size.')
         try:
-            bencode(self.torrent_dict)
+            codecs.lookup(self.encoding)
+        except LookupError as e:
+            ret.append(f"Invalid encoding {self.encoding}.")
+        try:
+            bencode(self.torrent_dict, self.encoding)
         except Exception as e:
             ret.append(f"Torrent bencoding failed ({e}).")
         return ret
