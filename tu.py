@@ -1043,8 +1043,7 @@ class Main():
                 (fpaths[1].is_file and fpaths[1].suffix.lower() == '.torrent'):
                 return 'verify'                                                                     # 1:F/D 2:T = v
 
-        print('Supplied paths does not suggest any working mode.\nTerminated.')
-        sys.exit()
+        Main.__exit('Supplied paths does not suggest any working mode.')
 
 
     @staticmethod
@@ -1062,8 +1061,7 @@ class Main():
                     spath = fpaths[0]
                     tpath = spath.parent.joinpath(f"{spath.name}.torrent")                          # 1:F/D/T
                 else:
-                    print(f"The source '{fpaths[0]}' does not exist.\nTerminated.")
-                    sys.exit()
+                    Main.__exit(f"The source '{fpaths[0]}' does not exist.")
             elif len(fpaths) == 2:
                 if (fpaths[0].is_dir() or not fpaths[0].is_file()) and \
                    (fpaths[1].is_file() and fpaths[1].suffix.lower() != '.torrent'):
@@ -1090,14 +1088,11 @@ class Main():
                     spath = fpaths[1]
                     tpath = fpaths[0]                                                               # 1:T(v) 2:T
                 else:
-                    print('You supplied paths cannot work in `create` mode.\nTerminated.')
-                    sys.exit()
+                    Main.__exit('You supplied paths cannot work in `create` mode.')
             else:
-                print(f"`create` mode expects 1 or 2 paths, not {len(fpaths)}.")
-                sys.exit()
+                Main.__exit(f"`create` mode expects 1 or 2 paths, not {len(fpaths)}.")
             if spath == tpath:                                                                      # stop 1:T=2:T
-                print('Source and torrent path cannot be same.\nTerminated.')
-                sys.exit()
+                Main.__exit('Source and torrent path cannot be same.')
             if spath.is_file() and spath.suffix.lower() == '.torrent':                              # warn spath:T
                 print('W: You are likely to create torrent from torrent, which may be unexpected.')
 
@@ -1146,15 +1141,12 @@ class Main():
                     if spath == tpath:
                         print('W: You are likely to overwrite the source torrent, which may be unexpected.')
                 else:
-                    print(f"`modify` mode expects a valid torrent path, not {fpaths[0]}.\nTerminated.")
-                    sys.exit()
+                    Main.__exit(f"`modify` mode expects a valid torrent path, not {fpaths[0]}.")
             else:
-                print(f"`modify` mode expects 1 or 2 paths, not {len(fpaths)}.\nTerminated.")
-                sys.exit()
+                Main.__exit(f"`modify` mode expects 1 or 2 paths, not {len(fpaths)}.")
 
         else:
-            print('Failed to sort paths for source and torrent.\nTerminated.')
-            sys.exit()
+            Main.__exit('Failed to sort paths for source and torrent.')
 
         return tpath, spath
 
@@ -1181,17 +1173,13 @@ class Main():
                     if d.get('private'): metadata['private'] = int(d['private'])
                     if d.get('source'): metadata['source'] = str(d['source'])
                 except FileNotFoundError:
-                    print('failed (file not found)\nTerminated.')
-                    sys.exit()
+                    Main.__exit('failed (file not found)')
                 except UnicodeDecodeError:
-                    print('failed (invalid file)\nTerminated.')
-                    sys.exit()
+                    Main.__exit('failed (invalid file)')
                 except json.decoder.JSONDecodeError:
-                    print('failed (invalid json)\nTerminated.')
-                    sys.exit()
+                    print('failed (invalid json)')
                 except KeyError:
-                    print('failed (missing key)\nTerminated.')
-                    sys.exit()
+                    Main.__exit('failed (missing key)')
                 else:
                     print('succeeded')
 
@@ -1244,6 +1232,11 @@ class Main():
 
         return metadata
 
+    @staticmethod
+    def __exit(chars=''):
+        input(chars + '\nTerminated. (Press ENTER to exit)')
+        sys.exit()
+
 
     def __call__(self):
         if self.mode == 'create':
@@ -1266,8 +1259,7 @@ class Main():
             self._set()
             self._write()
         else:
-            print(f"Invalid mode: {mode}.\nTerminated.")
-            sys.exit()
+            self.__exit(f"Invalid mode: {mode}.")
 
         print();
         input('Press ENTER to exit...')
@@ -1300,7 +1292,7 @@ class Main():
         print(f"Size: {fsize}, {fnum}, {psize} KiB x {pnum} Pieces")
         if tdate and tfrom:
             print(f"Time: {tdate} by {tfrom}")
-        elif tdata:
+        elif tdate:
             print(f"Time: {tdate}")
         elif tfrom:
             print(f"From: {tdate}")
@@ -1328,8 +1320,7 @@ class Main():
         elif self.mode == 'modify':
             self.torrent.read(self.spath)
         else:
-            print(f"Unexpected {self.mode} mode for read operation.\nTerminated.")
-            sys.exit()
+            self.__exit(f"Unexpected {self.mode} mode for read operation.")
 
 
     def _verify(self):
@@ -1343,20 +1334,17 @@ class Main():
                 if pathlib.Path(tname) in spath.iterdir() and (tmp := spath.joinpath(tname)).is_file():
                     spath = tmp
                 else:
-                    print(f"E: The source file '{spath}' was not found.\nTerminated.")
-                    sys.exit()
+                    self.__exit(f"E: The source file '{spath}' was not found.")
         elif self.torrent.num_files > 1:
             if spath.is_file():
-                print(f"E: The source directory '{spath}' was not found.\nTerminated.")
-                sys.exit()
+                self.__exit(f"E: The source directory '{spath}' was not found.")
             elif spath.is_dir():
                 if spath.name == tname:
                     spath = spath
                 elif pathlib.Path(tname) in spath.iterdir() and (tmp := spath.joinpath(self.name)).is_dir():
                     spath = tmp
                 else:
-                    print(f"E: The source directory '{spath}' was not found.\nTerminated.")
-                    sys.exit()
+                    self.__exit(f"E: The source directory '{spath}' was not found.")
 
         piece_broken_list = self.torrent.verify(spath)
         ptotal = self.torrent.num_pieces
@@ -1388,8 +1376,7 @@ class Main():
         try:
             self.torrent.set(**self.metadata)
         except PieceSizeTooSmall as e:
-            print(f"Piece size must be larger than 16KiB, not {self.metadata['piece_size'] >> 10} bytes.\nTerminated.")
-            sys.exit()
+            self.__exit(f"Piece size must be larger than 16KiB, not {self.metadata['piece_size'] >> 10} bytes.")
         except PieceSizeUncommon as e:
             if (not self.cfg.show_prompt) or \
                input(f"Uncommon piece size {self.metadata['piece_size'] << 10} KiB. Confirm? (y/N): ").lower() == 'y':
@@ -1397,8 +1384,7 @@ class Main():
                 self.metadata.pop('piece_size')
                 self.torrent.set(**self.metadata)
             else:
-                print('Terminated.')
-                sys.exit()
+                self.__exit()
 
 
     def _write(self):
@@ -1412,8 +1398,7 @@ class Main():
                     self.torrent.write(fpath, overwrite=True)
                     print(f"Torrent saved to '{fpath}' (overwritten).")
             else:
-                print('Terminated.')
-                sys.exit()
+                self.__exit()
 
 
 
