@@ -1030,17 +1030,17 @@ class Main():
         elif len(fpaths) == 2:
             # inferred as `create` mode requires 1 existing and 1 virtual path
             if (fpaths[0].is_dir() or not fpaths[0].is_file()) and \
-               (fpaths[1].is_file() and fpaths[1].suffix != '.torrent'):
+               (fpaths[1].is_file() and fpaths[1].suffix.lower() != '.torrent'):
                 return 'create'                                                                     # 1:D(v) 2:F = c
             if (fpaths[0].is_dir() or (fpaths[0].is_file() and fpaths[0].suffix.lower() != '.torrent')) and \
                (fpaths[1].is_dir() or not fpaths[1].is_file()):
                 return 'create'                                                                     # 1:F/D 2:D(v) = c
             # inferred as `verify` requires both paths existing
-            if (fpaths[0].is_file() and fpaths[0].suffix == '.torrent') and \
+            if (fpaths[0].is_file() and fpaths[0].suffix.lower() == '.torrent') and \
                 ((fpaths[1].is_file() and fpaths[1].suffix.lower() != '.torrent') or fpaths[1].is_dir()):
                 return 'verify'                                                                     # 1:T 2:F/D = v
             if ((fpaths[0].is_file() and fpaths[0].suffix.lower() != '.torrent') or fpaths[0].is_dir()) and \
-                (fpaths[1].is_file and fpaths[1].suffix == '.torrent'):
+                (fpaths[1].is_file and fpaths[1].suffix.lower() == '.torrent'):
                 return 'verify'                                                                     # 1:F/D 2:T = v
 
         print('Supplied paths does not suggest any working mode.\nTerminated.')
@@ -1066,27 +1066,27 @@ class Main():
                     sys.exit()
             elif len(fpaths) == 2:
                 if (fpaths[0].is_dir() or not fpaths[0].is_file()) and \
-                   (fpaths[1].is_file() and fpaths[1].suffix != '.torrent') :                       # 1:D(v) 2:F
+                   (fpaths[1].is_file() and fpaths[1].suffix.lower() != '.torrent') :                       # 1:D(v) 2:F
                     spath = fpaths[1]
                     tpath = fpaths[0].joinpath(f"{spath.name}.torrent")
-                elif (fpaths[0].is_dir() or (fpaths[0].is_file() and fpaths[0].suffix != '.torrent')) and \
+                elif (fpaths[0].is_dir() or (fpaths[0].is_file() and fpaths[0].suffix.lower() != '.torrent')) and \
                      (fpaths[1].is_dir() or not fpaths[1].is_file()):                               # 1:F/D 2:D(v)
                     spath = fpaths[0]
                     tpath = fpaths[1].joinpath(f"{spath.name}.torrent")
-                elif (fpaths[0].suffix == '.torrent' and not fpaths[0].is_dir()) and \
-                     (fpaths[1].is_dir() or (fpaths[1].is_file() and fpaths[1].suffix != '.torrent')): # 1:T(v) 2:F/D
+                elif (fpaths[0].suffix.lower() == '.torrent' and not fpaths[0].is_dir()) and \
+                     (fpaths[1].is_dir() or (fpaths[1].is_file() and fpaths[1].suffix.lower() != '.torrent')): # 1:T(v) 2:F/D
                     spath = fpaths[1]
                     tpath = fpaths[0]
-                elif (fpaths[0].is_dir() or (fpaths[0].is_file() and fpaths[0].suffix != '.torrent')) and \
-                     (fpaths[1].suffix == '.torrent' and not fpaths[1].is_dir()):                   # 1:F/D 2:T(v)
+                elif (fpaths[0].is_dir() or (fpaths[0].is_file() and fpaths[0].suffix.lower() != '.torrent')) and \
+                     (fpaths[1].suffix.lower() == '.torrent' and not fpaths[1].is_dir()):                   # 1:F/D 2:T(v)
                     spath = fpaths[0]
                     tpath = fpaths[1]
-                elif (fpaths[0].is_file() and fpaths[0].suffix == '.torrent') and \
-                     (fpaths[1].suffix == '.torrent' and not fpaths[1].is_dir()):                   # 1:T 2:T(v)
+                elif (fpaths[0].is_file() and fpaths[0].suffix.lower() == '.torrent') and \
+                     (fpaths[1].suffix.lower() == '.torrent' and not fpaths[1].is_dir()):                   # 1:T 2:T(v)
                     spath = fpaths[0]
                     tpath = fpaths[1]
-                elif (fpaths[0].suffix == '.torrent' and not fpaths[0].is_dir()) and \
-                     (fpaths[1].is_file() and fpaths[1].suffix == '.torrent'):                      # 1:T(v) 2:T
+                elif (fpaths[0].suffix.lower() == '.torrent' and not fpaths[0].is_dir()) and \
+                     (fpaths[1].is_file() and fpaths[1].suffix.lower() == '.torrent'):                      # 1:T(v) 2:T
                     spath = fpaths[1]
                     tpath = fpaths[0]
                 else:
@@ -1098,7 +1098,7 @@ class Main():
             if spath == tpath:                                                                      # stop 1:T=2:T
                 print('Source and torrent path cannot be same.\nTerminated.')
                 sys.exit()
-            if spath.is_file() and spath.suffix == '.torrent':                                      # warn spath:T
+            if spath.is_file() and spath.suffix.lower() == '.torrent':                                      # warn spath:T
                 print('W: You are likely to create torrent from torrent, which may be unexpected.')
 
 
@@ -1106,7 +1106,7 @@ class Main():
         # the path must be an existing tpath
         elif mode == 'print':
             if len(fpaths) == 1:
-                if fpaths[0].is_file() and fpaths[0].suffix == '.torrent':
+                if fpaths[0].is_file() and fpaths[0].suffix.lower() == '.torrent':
                     tpath = fpaths[0]
                 else:
                     print(f"`print` mode expects a valid torrent path, not {fpaths[0]}.")
@@ -1119,12 +1119,12 @@ class Main():
         # inferred as `verify` requires both paths existing                                                              # 1:F/D 2:T = v
         elif mode == 'verify':
             if len(fpaths) == 2:
-                if (fpaths[0].is_file() and fpaths[0].suffix == '.torrent') and \
+                if (fpaths[0].is_file() and fpaths[0].suffix.lower() == '.torrent') and \
                    ((fpaths[1].is_file() and fpaths[1].suffix.lower() != '.torrent') or fpaths[1].is_dir()):
                     spath = fpaths[1]
                     tpath = fpaths[0]
                 elif ((fpaths[0].is_file() and fpaths[0].suffix.lower() != '.torrent') or fpaths[0].is_dir()) and \
-                   (fpaths[1].is_file() and fpaths[1].suffix == '.torrent'):
+                   (fpaths[1].is_file() and fpaths[1].suffix.lower() == '.torrent'):
                     spath = fpaths[0]
                     tpath = fpaths[1]
                 else:
@@ -1137,11 +1137,11 @@ class Main():
         # `modify` mode requires 1 or 2 paths
         elif mode == 'modify':
             if 1 <= len(fpaths) <= 2:
-                if fpaths[0].is_file() and fpaths[0].suffix == '.torrent':
+                if fpaths[0].is_file() and fpaths[0].suffix.lower() == '.torrent':
                     spath = fpaths[0]
                     tpath = spath if not fpaths[1:] else (
                             fpaths[1].joinpath(spath.name) if fpaths[1].is_dir() else (
-                            fpaths[1] if fpaths[1].suffix == '.torrent' else \
+                            fpaths[1] if fpaths[1].suffix.lower() == '.torrent' else \
                             fpaths[1].parent.joinpath(f"{fpaths[1].name}.torrent")))
                     if spath == tpath:
                         print('W: You are likely to overwrite the source torrent, which may be unexpected.')
@@ -1433,8 +1433,6 @@ class _CustomHelpFormatter(argparse.HelpFormatter):
 
 
 if __name__ == '__main__':
-
-    # sys.argv = ['TorrentUtils.py', r"Z:\test", r"Z:\test.torrent"]
 
     parser = argparse.ArgumentParser(prog='tu', formatter_class=lambda prog: _CustomHelpFormatter(prog))
 
