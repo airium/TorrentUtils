@@ -1012,24 +1012,37 @@ class Main():
 
     @staticmethod
     def __inferMode(args):
-        '''Inferring working mode from the number of paths is limited: some modes cannot be inferred'''
+        '''Infer working mode from paths is limited: some modes cannot be inferred'''
         if args.mode:
-            ret = args.mode
-        else:
-            fpaths = args.fpaths
-            if len(fpaths) == 1 and fpaths[0].is_dir():
-                ret = 'create'
-            elif len(fpaths) == 1 and fpaths[0].is_file() and fpaths[0].suffix.lower() != '.torrent':
-                ret = 'create'
-            elif len(fpaths) == 1 and fpaths[0].is_file() and fpaths[0].suffix.lower() == '.torrent':
-                ret = 'print'
-            elif len(fpaths) == 2 and fpaths[0].is_file() and fpaths[0].suffix.lower() == '.torrent':
-                ret = 'verify'
-            elif len(fpaths) == 2 and fpaths[1].is_file() and fpaths[1].suffix.lower() == '.torrent':
-                ret = 'verify'
-            else:
-                raise ValueError('Failed to infer working mode.')
-        return ret
+            return args.mode
+
+        # user didn't specify a working mode
+        fpaths = args.fpaths
+        if len(fpaths) == 1:
+            if fpaths[0].is_dir():
+                return 'create'                                                                     # 1:D -> c
+            elif fpaths[0].is_file():
+                if fpaths[0].suffix.lower() == '.torrent':
+                    return 'print'                                                                  # 1:T -> p
+                else: # suffix not '.torrent'
+                    return 'create'                                                                 # 1:F -> c
+
+        elif len(fpaths) == 2:
+            if (fpaths[0].is_dir() or not fpaths[0].is_file()) and \
+               (fpaths[1].is_file() and fpaths[1].suffix != '.torrent'):
+                return 'create'                                                                     # 1:D 2:F = c
+            if (fpaths[0].is_dir() or fpaths[0].is_file()) and \
+               (fpaths[1].is_dir() or not fpaths[1].is_file()):
+                return 'create'                                                                     # 1:F/D 2:D = c
+            if (fpaths[0].is_file and fpaths[0].suffix == '.torrent') and \
+                (fpaths[1].is_file or fpaths[1].is_dir()):
+                return 'verify'                                                                     # 1:T 2:F/D = v
+            if (fpaths[0].is_file or fpaths[0].is_dir()) and \
+                (fpaths[1].is_file and fpaths[1].suffix == '.torrent'):
+                return 'verify'                                                                     # 1:F/D 2:T = v
+
+        print('Failed to infer a working mode from supplied paths.\nTerminated.')
+        sys.exit()
 
 
     @staticmethod
