@@ -1394,9 +1394,9 @@ if __name__ == '__main__':
     parser.add_argument('fpaths', type=pathlib.Path, nargs='*',
                         help='1 or 2 paths depending on mode', metavar='path')
     parser.add_argument('-m', '--mode', dest='mode', choices=('create', 'print', 'verify', 'modify'),
-                        help='will be guessed from paths if not specified')
+                        help='mode will be inferred from paths if not specified')
     parser.add_argument('-t', '--tracker', dest='tracker_list', type=str, action='extend', nargs='+',
-                        help='can be specified multiple times', metavar='url')
+                        help='trackers can be supplied multiple times', metavar='url')
     parser.add_argument('-s', '--piece-size', dest='piece_size', type=int,
                         help='piece size in KiB (default: 4096)', metavar='number')
     parser.add_argument('-c', '--comment', dest='comment', type=str,
@@ -1404,15 +1404,15 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--private', dest='private', type=int, choices={0, 1},
                         help='private torrent if 1 (default: 0)')
     parser.add_argument('--by', dest='created_by', type=str,
-                        help='customise `created by` message (default: TorrentUtils)', metavar='text')
+                        help='override `created by` message', metavar='text')
     parser.add_argument('--time', dest='creation_date', type=int,
-                        help='customise the second since 19700101 (default: now)', metavar='number')
+                        help='override the second since 19700101 (default: now)', metavar='number')
     parser.add_argument('--source', dest='source', type=str,
-                        help='customise `source` message (will change torrent hash)', metavar='text')
+                        help='override source message and change torrent hash', metavar='text')
     parser.add_argument('--encoding', dest='encoding', type=str,
-                        help='customise encoding for filenames (default: UTF-8)', metavar='text')
+                        help='override text encoding (recommended: UTF-8)', metavar='text')
     parser.add_argument('--json', dest='json', type=pathlib.Path,
-                        help='user-defined json providing metadata presets', metavar='path')
+                        help='load a json preset for metadata in creating torrent', metavar='path')
     parser.add_argument('--time-suffix', dest='with_time_suffix', action='store_true',
                         help='insert time between torrent filename and extension')
     parser.add_argument('--progress', dest='show_progress', action='store_true',
