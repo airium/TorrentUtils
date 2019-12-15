@@ -51,13 +51,13 @@ Assume: \
 `D`: a path that looks like a directory. \
 `F`: a path that looks like a regular file (not a torrent).
 
-| 1: 1st path arg<br>2: 2nd path arg | 1:F/D | 1:T | 1:F<br>2:F | 1:D<br>2:F | 1:T<br>2:F | 1:F<br>2:D | 1:D<br>2:D | 1:T<br>2:D | 1:F<br>2:T | 1:D<br>2:T | 1:T<br>2:T |
-|------------------------------------|------------------|------------------|------------|------------------|------------------|------------------|------------------|------------------|------------------|------------------|------------------|
-| CLI w/o mode<br>(=GUI Drag-Drop) | create | print | - | create | verify | create | create | verify | verify | verify | - |
-| CLI -m create | load 1<br>save 1 | - | - | load 2<br>save 1 | load 2<br>save 1 | load 1<br>save 2 | load 1<br>save 2 | load 2<br>save 1 | load 1<br>save 2 | load 1<br>save 2 | - |
-| CLI -m print | - | read 1 | - | - | - | - | - | - | - | - | - |
-| CLI -m verify | - | - | - | - | read 1<br>load 2 | - | - | read 1<br>load 2 | load 1<br>read 2 | load 1<br>read 2 | - |
-| CLI -m modify | - | read 1<br>save 1 | - | - | - | - | - | - | - | - | read 1<br>save 2 |
+| 1: 1st path arg<br>2: 2nd path arg | 1:F/D | 1:T | 1:D<br>2:F | 1:F/D<br>2:D | 1:T<br>2:F/D | 1:F/D<br>2:T | 1:T<br>2:T | 1:F<br>2:F |
+|------------------------------------|------------------|------------------|------------------|------------------|------------------|------------------|------------------|------------|
+| CLI -m create | load 1<br>save 1 | load 1<br>save 1 | load 2<br>save 1 | load 1<br>save 2 | load 2<br>save 1 | load 1<br>save 2 | load 1<br>save 2 | - |
+| CLI -m print | - | read 1 | - | - | - | - | - | - |
+| CLI -m verify | - | - | - | - | read 1<br>load 2 | load 1<br>read 2 | - | - |
+| CLI -m modify | - | read 1<br>save 1 | - | - | - | - | read 1<br>save 2 | - |
+| CLI w/o mode<br>(=GUI Drag-Drop) | create | print | create | create | verify | verify | - | - |
 
 ---
 
