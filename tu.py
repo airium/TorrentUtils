@@ -1058,37 +1058,37 @@ class Main():
         # the selected source path must exist, while the torrent path can be optional
         if mode == 'create':
             if len(fpaths) == 1:
-                if fpaths[0].exists():                                                              # 1:F/D/T
+                if fpaths[0].exists():
                     spath = fpaths[0]
-                    tpath = spath.parent.joinpath(f"{spath.name}.torrent")
+                    tpath = spath.parent.joinpath(f"{spath.name}.torrent")                          # 1:F/D/T
                 else:
                     print(f"The source '{fpaths[0]}' does not exist.\nTerminated.")
                     sys.exit()
             elif len(fpaths) == 2:
                 if (fpaths[0].is_dir() or not fpaths[0].is_file()) and \
-                   (fpaths[1].is_file() and fpaths[1].suffix.lower() != '.torrent') :                       # 1:D(v) 2:F
+                   (fpaths[1].is_file() and fpaths[1].suffix.lower() != '.torrent'):
                     spath = fpaths[1]
-                    tpath = fpaths[0].joinpath(f"{spath.name}.torrent")
+                    tpath = fpaths[0].joinpath(f"{spath.name}.torrent")                             # 1:D(v) 2:F
                 elif (fpaths[0].is_dir() or (fpaths[0].is_file() and fpaths[0].suffix.lower() != '.torrent')) and \
-                     (fpaths[1].is_dir() or not fpaths[1].is_file()):                               # 1:F/D 2:D(v)
+                     (fpaths[1].is_dir() or not fpaths[1].is_file()):
                     spath = fpaths[0]
-                    tpath = fpaths[1].joinpath(f"{spath.name}.torrent")
+                    tpath = fpaths[1].joinpath(f"{spath.name}.torrent")                             # 1:F/D 2:D(v)
                 elif (fpaths[0].suffix.lower() == '.torrent' and not fpaths[0].is_dir()) and \
-                     (fpaths[1].is_dir() or (fpaths[1].is_file() and fpaths[1].suffix.lower() != '.torrent')): # 1:T(v) 2:F/D
+                     (fpaths[1].is_dir() or (fpaths[1].is_file() and fpaths[1].suffix.lower() != '.torrent')):
                     spath = fpaths[1]
-                    tpath = fpaths[0]
+                    tpath = fpaths[0]                                                               # 1:T(v) 2:F/D
                 elif (fpaths[0].is_dir() or (fpaths[0].is_file() and fpaths[0].suffix.lower() != '.torrent')) and \
-                     (fpaths[1].suffix.lower() == '.torrent' and not fpaths[1].is_dir()):                   # 1:F/D 2:T(v)
+                     (fpaths[1].suffix.lower() == '.torrent' and not fpaths[1].is_dir()):
                     spath = fpaths[0]
-                    tpath = fpaths[1]
+                    tpath = fpaths[1]                                                               # 1:F/D 2:T(v)
                 elif (fpaths[0].is_file() and fpaths[0].suffix.lower() == '.torrent') and \
-                     (fpaths[1].suffix.lower() == '.torrent' and not fpaths[1].is_dir()):                   # 1:T 2:T(v)
+                     (fpaths[1].suffix.lower() == '.torrent' and not fpaths[1].is_dir()):
                     spath = fpaths[0]
-                    tpath = fpaths[1]
+                    tpath = fpaths[1]                                                               # 1:T 2:T(v)
                 elif (fpaths[0].suffix.lower() == '.torrent' and not fpaths[0].is_dir()) and \
-                     (fpaths[1].is_file() and fpaths[1].suffix.lower() == '.torrent'):                      # 1:T(v) 2:T
+                     (fpaths[1].is_file() and fpaths[1].suffix.lower() == '.torrent'):
                     spath = fpaths[1]
-                    tpath = fpaths[0]
+                    tpath = fpaths[0]                                                               # 1:T(v) 2:T
                 else:
                     print('You supplied paths cannot work in `create` mode.\nTerminated.')
                     sys.exit()
@@ -1098,7 +1098,7 @@ class Main():
             if spath == tpath:                                                                      # stop 1:T=2:T
                 print('Source and torrent path cannot be same.\nTerminated.')
                 sys.exit()
-            if spath.is_file() and spath.suffix.lower() == '.torrent':                                      # warn spath:T
+            if spath.is_file() and spath.suffix.lower() == '.torrent':                              # warn spath:T
                 print('W: You are likely to create torrent from torrent, which may be unexpected.')
 
 
@@ -1153,7 +1153,8 @@ class Main():
                 sys.exit()
 
         else:
-            raise ValueError('Failed to sort paths for source and torrent.')
+            print('Failed to sort paths for source and torrent.\nTerminated.')
+            sys.exit()
 
         return tpath, spath
 
@@ -1265,7 +1266,8 @@ class Main():
             self._set()
             self._write()
         else:
-            raise ValueError(f"Invalid mode: {mode}.")
+            print(f"Invalid mode: {mode}.\nTerminated.")
+            sys.exit()
 
         print();
         input('Press ENTER to exit...')
@@ -1381,11 +1383,13 @@ class Main():
                     break
             print('\nI: Some files may be in fact OK but cannot be verified as their neighbour files failed.')
 
+
     def _set(self):
         try:
             self.torrent.set(**self.metadata)
         except PieceSizeTooSmall as e:
-            raise ValueError(f"Piece size must be larger than 16KiB, not {self.metadata['piece_size'] >> 10} bytes.")
+            print(f"Piece size must be larger than 16KiB, not {self.metadata['piece_size'] >> 10} bytes.\nTerminated.")
+            sys.exit()
         except PieceSizeUncommon as e:
             if (not self.cfg.show_prompt) or \
                input(f"Uncommon piece size {self.metadata['piece_size'] << 10} KiB. Confirm? (y/N): ").lower() == 'y':
@@ -1451,15 +1455,15 @@ if __name__ == '__main__':
     parser.add_argument('--by', dest='created_by', type=str,
                         help='override `created by` message', metavar='text')
     parser.add_argument('--time', dest='creation_date', type=int,
-                        help='override the second since 19700101 (default: now)', metavar='number')
+                        help='override the time in sec since 19700101 (default: now)', metavar='number')
     parser.add_argument('--source', dest='source', type=str,
                         help='override source message and change torrent hash', metavar='text')
     parser.add_argument('--encoding', dest='encoding', type=str,
-                        help='override text encoding (recommended: UTF-8)', metavar='text')
+                        help='override text encoding (recommend: UTF-8)', metavar='text')
     parser.add_argument('--json', dest='json', type=pathlib.Path,
                         help='load a json preset for metadata in creating torrent', metavar='path')
     parser.add_argument('--time-suffix', dest='with_time_suffix', action='store_true',
-                        help='insert time between torrent filename and extension')
+                        help='insert time to saved torrent')
     parser.add_argument('--progress', dest='show_progress', action='store_true',
                         help='show progress bar during creating torrent')
     parser.add_argument('-y', '--yes', dest='show_prompt', action='store_false',
