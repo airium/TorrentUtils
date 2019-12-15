@@ -1012,7 +1012,7 @@ class Main():
 
     @staticmethod
     def __inferMode(args):
-        '''Infer working mode from paths is limited: some modes cannot be inferred'''
+        '''Infer working mode from paths is limited: some modes cannot be inferred.'''
         if args.mode:
             return args.mode
 
@@ -1028,20 +1028,22 @@ class Main():
                     return 'create'                                                                 # 1:F -> c
 
         elif len(fpaths) == 2:
+            # inferred as `create` mode requires 1 existing and 1 virtual path
             if (fpaths[0].is_dir() or not fpaths[0].is_file()) and \
                (fpaths[1].is_file() and fpaths[1].suffix != '.torrent'):
-                return 'create'                                                                     # 1:D 2:F = c
-            if (fpaths[0].is_dir() or fpaths[0].is_file()) and \
+                return 'create'                                                                     # 1:D(v) 2:F = c
+            if (fpaths[0].is_dir() or (fpaths[0].is_file() and fpaths[0].suffix.lower() != '.torrent')) and \
                (fpaths[1].is_dir() or not fpaths[1].is_file()):
-                return 'create'                                                                     # 1:F/D 2:D = c
-            if (fpaths[0].is_file and fpaths[0].suffix == '.torrent') and \
-                (fpaths[1].is_file or fpaths[1].is_dir()):
+                return 'create'                                                                     # 1:F/D 2:D(v) = c
+            # inferred as `verify` requires both paths existing
+            if (fpaths[0].is_file() and fpaths[0].suffix == '.torrent') and \
+                ((fpaths[1].is_file() and fpaths[1].suffix.lower() != '.torrent') or fpaths[1].is_dir()):
                 return 'verify'                                                                     # 1:T 2:F/D = v
-            if (fpaths[0].is_file or fpaths[0].is_dir()) and \
+            if ((fpaths[0].is_file() and fpaths[0].suffix.lower() != '.torrent') or fpaths[0].is_dir()) and \
                 (fpaths[1].is_file and fpaths[1].suffix == '.torrent'):
                 return 'verify'                                                                     # 1:F/D 2:T = v
 
-        print('Failed to infer a working mode from supplied paths.\nTerminated.')
+        print('Supplied paths does not suggest any working mode.\nTerminated.')
         sys.exit()
 
 
@@ -1053,24 +1055,52 @@ class Main():
         tpath = None # Torrent PATH is the path to the torrent itself
 
         # `create` mode requires 1 or 2 paths
-        # the first path must be an existing spath
-        # the second path is optional and must be tpath if supplied
+        # the selected source path must exist, while the torrent path can be optional
         if mode == 'create':
-            if 1 <= len(fpaths) <= 2:
-                if fpaths[0].exists():
+            if len(fpaths) == 1:
+                if fpaths[0].exists():                                                              # 1:F/D/T
                     spath = fpaths[0]
-                    tpath = spath.parent.joinpath(f"{spath.name}.torrent") if not fpaths[1:] else (
-                            fpaths[1].joinpath(f"{spath.name}.torrent") if fpaths[1].is_dir() else (
-                            fpaths[1] if fpaths[1].suffix == '.torrent' else \
-                            fpaths[1].parent.joinpath(f"{fpaths[1].name}.torrent")))
-                    if spath.is_file() and spath.suffix == '.torrent':
-                        print('W: You are likely to create torrent from torrent, which may be unexpected.')
-                    if spath == tpath:
-                        raise ValueError('Source and torrent path cannot be same.')
+                    tpath = spath.parent.joinpath(f"{spath.name}.torrent")
                 else:
-                    raise FileNotFoundError(f"The source '{fpaths[0]}' does not exist.")
+                    print(f"The source '{fpaths[0]}' does not exist.\nTerminated.")
+                    sys.exit()
+            elif len(fpaths) == 2:
+                if (fpaths[0].is_dir() or not fpaths[0].is_file()) and \
+                   (fpaths[1].is_file() and fpaths[1].suffix != '.torrent') :                       # 1:D(v) 2:F
+                    spath = fpaths[1]
+                    tpath = fpaths[0].joinpath(f"{spath.name}.torrent")
+                elif (fpaths[0].is_dir() or (fpaths[0].is_file() and fpaths[0].suffix != '.torrent')) and \
+                     (fpaths[1].is_dir() or not fpaths[1].is_file()):                               # 1:F/D 2:D(v)
+                    spath = fpaths[0]
+                    tpath = fpaths[1].joinpath(f"{spath.name}.torrent")
+                elif (fpaths[0].suffix == '.torrent' and not fpaths[0].is_dir()) and \
+                     (fpaths[1].is_dir() or (fpaths[1].is_file() and fpaths[1].suffix != '.torrent')): # 1:T(v) 2:F/D
+                    spath = fpaths[1]
+                    tpath = fpaths[0]
+                elif (fpaths[0].is_dir() or (fpaths[0].is_file() and fpaths[0].suffix != '.torrent')) and \
+                     (fpaths[1].suffix == '.torrent' and not fpaths[1].is_dir()):                   # 1:F/D 2:T(v)
+                    spath = fpaths[0]
+                    tpath = fpaths[1]
+                elif (fpaths[0].is_file() and fpaths[0].suffix == '.torrent') and \
+                     (fpaths[1].suffix == '.torrent' and not fpaths[1].is_dir()):                   # 1:T 2:T(v)
+                    spath = fpaths[0]
+                    tpath = fpaths[1]
+                elif (fpaths[0].suffix == '.torrent' and not fpaths[0].is_dir()) and \
+                     (fpaths[1].is_file() and fpaths[1].suffix == '.torrent'):                      # 1:T(v) 2:T
+                    spath = fpaths[1]
+                    tpath = fpaths[0]
+                else:
+                    print('You supplied paths cannot work in `create` mode.\nTerminated.')
+                    sys.exit()
             else:
-                raise ValueError(f"`create` mode expects 1 or 2 paths, not {len(fpaths)}.")
+                print(f"`create` mode expects 1 or 2 paths, not {len(fpaths)}.")
+                sys.exit()
+            if spath == tpath:                                                                      # stop 1:T=2:T
+                print('Source and torrent path cannot be same.\nTerminated.')
+                sys.exit()
+            if spath.is_file() and spath.suffix == '.torrent':                                      # warn spath:T
+                print('W: You are likely to create torrent from torrent, which may be unexpected.')
+
 
         # `print` mode requires exactly 1 path
         # the path must be an existing tpath
@@ -1079,30 +1109,32 @@ class Main():
                 if fpaths[0].is_file() and fpaths[0].suffix == '.torrent':
                     tpath = fpaths[0]
                 else:
-                    raise FileNotFoundError(f"`print` mode expects a valid torrent path, not {fpaths[0]}.")
+                    print(f"`print` mode expects a valid torrent path, not {fpaths[0]}.")
+                    sys.exit()
             else:
-                raise ValueError(f"`print` mode expects exactly 1 path, not {len(fpaths)}.")
+                print(f"`print` mode expects exactly 1 path, not {len(fpaths)}.")
+                sys.exit()
 
         # `verify` mode requires exactly 2 paths
-        # the first path must be an existing spath
-        # the second path must be an existing tpath
-        # the logic goes like "verify spath with tpath", so spath first tpath second
+        # inferred as `verify` requires both paths existing                                                              # 1:F/D 2:T = v
         elif mode == 'verify':
             if len(fpaths) == 2:
-                if fpaths[0].exists() and fpaths[1].is_file() and fpaths[1].suffix == '.torrent':
-                    spath = fpaths[0]
-                    tpath = fpaths[1]
-                elif fpaths[1].exists() and fpaths[0].is_file() and fpaths[0].suffix == '.torrent':
+                if (fpaths[0].is_file() and fpaths[0].suffix == '.torrent') and \
+                   ((fpaths[1].is_file() and fpaths[1].suffix.lower() != '.torrent') or fpaths[1].is_dir()):
                     spath = fpaths[1]
                     tpath = fpaths[0]
+                elif ((fpaths[0].is_file() and fpaths[0].suffix.lower() != '.torrent') or fpaths[0].is_dir()) and \
+                   (fpaths[1].is_file() and fpaths[1].suffix == '.torrent'):
+                    spath = fpaths[0]
+                    tpath = fpaths[1]
                 else:
-                    raise ValueError('`verify` mode expects a pair of valid source and torrent paths, but not found.')
+                    print('`verify` mode expects a pair of valid source and torrent paths, but not found.')
+                    sys.exit()
             else:
-                raise ValueError(f"`verify` mode expects exactly 2 paths, not {len(fpaths)}.")
+                print(f"`verify` mode expects exactly 2 paths, not {len(fpaths)}.")
+                sys.exit()
 
         # `modify` mode requires 1 or 2 paths
-        # the first path must be an existing path to the torrent you'd like to edit, denoted as spath
-        # the second path is optional, which is the alternative path to save the manipulated torrent
         elif mode == 'modify':
             if 1 <= len(fpaths) <= 2:
                 if fpaths[0].is_file() and fpaths[0].suffix == '.torrent':
@@ -1114,9 +1146,11 @@ class Main():
                     if spath == tpath:
                         print('W: You are likely to overwrite the source torrent, which may be unexpected.')
                 else:
-                    raise ValueError(f"`modify` mode expects a valid torrent path, not {fpaths[0]}.")
+                    print(f"`modify` mode expects a valid torrent path, not {fpaths[0]}.\nTerminated.")
+                    sys.exit()
             else:
-                raise ValueError(f"`modify` mode expects 1 or 2 paths, not {len(fpaths)}.")
+                print(f"`modify` mode expects 1 or 2 paths, not {len(fpaths)}.\nTerminated.")
+                sys.exit()
 
         else:
             raise ValueError('Failed to sort paths for source and torrent.')
