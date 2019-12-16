@@ -1150,11 +1150,11 @@ class Main():
 
 
     @staticmethod
-    def __loadJson(args, mode):
+    def __loadJson(jpath, mode):
         metadata = dict()
 
         if mode == 'create':
-            fpath = args.json if args.json else (
+            fpath = jpath if jpath else (
                     _ if (_ := pathlib.Path(__file__).absolute().with_suffix('.json')).is_file() else None)
             if fpath:
                 try:
