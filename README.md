@@ -63,9 +63,8 @@ Assume: \
 
 ## TODO and status
 
-1. Implement a tree-view for CLI print functionality.
-2. Implement the progress bar for creating and verifying torrent outside of core class.
-3. Implement multi-process for faster torrent creating with mp shared memory.
+1. Implement the progress bar for creating and verifying torrent outside of core class.
+2. Implement multi-process for faster torrent creating with mp shared memory.
 
 ### Core API
 
@@ -77,16 +76,16 @@ Assume: \
 
 ### CLI
 
-- [x] **print** torrent information
-- [x] **create** new torrent from source files, with json preset loader
-- [x] **modify** torrent metadata
-- [x] **verify** source files with torrent
-
-### GUI Drag-Drop (inherit CLI)
-
-- [x] print torrent information by dropping a torrent file
-- [x] create a torrent by dropping a non-torrent file/dir, with json preset auto-loading
-- [x] verify source files with torrent by dropping a non-torrent file/dir and a torrent
+- [x] Argument Parser
+- [x] Working mode
+  - [x] **print** torrent information incl. general info, trackers and files
+  - [x] **create** new torrent from source files, w/ json preset loader
+  - [x] **modify** torrent metadata
+  - [x] **verify** source files with torrent
+- [x] Automatic mode inference (for GUI Drag-Drop)
+  - [x] print torrent information by dropping a single torrent file
+  - [x] create a torrent by dropping a non-torrent file/dir, w/ json preset auto-loading
+  - [x] verify source files with torrent by dropping a non-torrent file/dir and a torrent
 
 ---
 
