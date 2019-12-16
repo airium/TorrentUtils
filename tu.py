@@ -993,12 +993,12 @@ class Main():
 
         # extract cli config from cli arguments
         self.cfg = self.__pickCliCfg(args)
-        # if mode is not specified, infer it from the number of supplied paths
+        # infer `mode` from the properties of supplied paths if not specified by the user
         self.mode = args.mode if args.mode else self.__inferMode(args.fpaths)
-        # based on the working mode, pick the most likely torrent and content paths
-        self.tpath, self.spath = self.__sortPath(args, self.mode)
-        # load json defaults
-        self.metadata = self.__loadJson(args, self.mode)
+        # pick the most appropriate paths for torrent and source path
+        self.tpath, self.spath = self.__pickPath(args.fpaths, self.mode)
+        # try loading user-defined preset for metadata
+        self.metadata = self.__loadJson(args.json, self.mode)
         # extract metadata from cli arguments
         self.metadata = self.__pickMetadata(args, self.mode, self.metadata)
 
@@ -1046,9 +1046,8 @@ class Main():
 
 
     @staticmethod
-    def __sortPath(args, mode):
+    def __pickPath(fpaths, mode):
         '''Based on the working mode, sort out the most proper paths for torrent and content.'''
-        fpaths = args.fpaths
         spath = None # Source PATH is the path to the files specified by a torrent
         tpath = None # Torrent PATH is the path to the torrent itself
 
