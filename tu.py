@@ -1382,7 +1382,7 @@ class Main():
         try:
             self.torrent.set(**self.metadata)
         except PieceSizeTooSmall as e:
-            self.__exit(f"Piece size must be larger than 16KiB, not {self.metadata['piece_size'] >> 10} bytes.")
+            self.__exit(f"Piece size must be larger than 16KiB, not {self.metadata['piece_size']} bytes.")
         except PieceSizeUncommon as e:
             if self.__prompt(f"Uncommon piece size {self.metadata['piece_size'] << 10} KiB. Confirm? (y/N): "):
                 self.torrent.setPieceLength(self.metadata['piece_size'], no_check=True)
