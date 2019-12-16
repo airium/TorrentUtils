@@ -994,7 +994,7 @@ class Main():
         # extract cli config from cli arguments
         self.cfg = self.__pickCliCfg(args)
         # if mode is not specified, infer it from the number of supplied paths
-        self.mode = self.__inferMode(args)
+        self.mode = args.mode if args.mode else self.__inferMode(args.fpaths)
         # based on the working mode, pick the most likely torrent and content paths
         self.tpath, self.spath = self.__sortPath(args, self.mode)
         # load json defaults
@@ -1015,13 +1015,8 @@ class Main():
 
 
     @staticmethod
-    def __inferMode(args):
+    def __inferMode(fpaths):
         '''Infer working mode from paths is limited: some modes cannot be inferred.'''
-        if args.mode:
-            return args.mode
-
-        # user didn't specify a working mode
-        fpaths = args.fpaths
         if len(fpaths) == 1:
             if fpaths[0].is_dir():
                 return 'create'                                                                     # 1:D -> c
