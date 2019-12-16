@@ -1236,10 +1236,18 @@ class Main():
 
         return metadata
 
-    @staticmethod
-    def __exit(chars=''):
+
+
+    def __exit(self, chars=''):
         input(chars + '\nTerminated. (Press ENTER to exit)')
         sys.exit()
+
+
+    def __prompt(self, chars):
+        if (not self.cfg.show_prompt) or input(chars).lower() in ('y', 'yes'):
+            return True
+        else:
+            return False
 
 
     def __call__(self):
@@ -1382,8 +1390,7 @@ class Main():
         except PieceSizeTooSmall as e:
             self.__exit(f"Piece size must be larger than 16KiB, not {self.metadata['piece_size'] >> 10} bytes.")
         except PieceSizeUncommon as e:
-            if (not self.cfg.show_prompt) or \
-               input(f"Uncommon piece size {self.metadata['piece_size'] << 10} KiB. Confirm? (y/N): ").lower() == 'y':
+            if self.__prompt(f"Uncommon piece size {self.metadata['piece_size'] << 10} KiB. Confirm? (y/N): "):
                 self.torrent.setPieceLength(self.metadata['piece_size'], no_check=True)
                 self.metadata.pop('piece_size')
                 self.torrent.set(**self.metadata)
@@ -1398,10 +1405,9 @@ class Main():
             self.torrent.write(fpath, overwrite=False)
             print(f"Torrent saved to '{fpath}'.")
         except FileExistsError as e:
-            if (not self.cfg.show_prompt) or \
-               input(f"The target file '{fpath}' already exists. Overwrite? (y/N): ").lower() == 'y':
-                    self.torrent.write(fpath, overwrite=True)
-                    print(f"Torrent saved to '{fpath}' (overwritten).")
+            if self.__prompt(f"The target file '{fpath}' already exists. Overwrite? (y/N): "):
+                self.torrent.write(fpath, overwrite=True)
+                print(f"Torrent saved to '{fpath}' (overwritten).")
             else:
                 self.__exit()
         except IsADirectoryError as e:
