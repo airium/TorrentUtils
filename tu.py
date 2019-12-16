@@ -1392,17 +1392,20 @@ class Main():
 
 
     def _write(self):
-        fpath = self.tpath.with_suffix(f"{'.' + time.strftime('%y%m%d-%H%M%S') if self.cfg.with_time_suffix else ''}.torrent")
+        fpath = self.tpath.with_suffix(
+            f"{'.' + time.strftime('%y%m%d-%H%M%S') if self.cfg.with_time_suffix else ''}.torrent")
         try:
             self.torrent.write(fpath, overwrite=False)
             print(f"Torrent saved to '{fpath}'.")
         except FileExistsError as e:
             if (not self.cfg.show_prompt) or \
-               input(f"The target '{fpath}' already exists. Overwrite? (y/N): ").lower() == 'y':
+               input(f"The target file '{fpath}' already exists. Overwrite? (y/N): ").lower() == 'y':
                     self.torrent.write(fpath, overwrite=True)
                     print(f"Torrent saved to '{fpath}' (overwritten).")
             else:
                 self.__exit()
+        except IsADirectoryError as e:
+            self.__exit(f"The target '{fpath}' is a directory.")
 
 
 
