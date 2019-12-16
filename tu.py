@@ -1231,8 +1231,8 @@ class Main():
         return metadata
 
 
-
-    def __exit(self, chars=''):
+    @staticmethod
+    def __exit(chars=''):
         input(chars + '\nTerminated. (Press ENTER to exit)')
         sys.exit()
 
@@ -1437,7 +1437,6 @@ class _CustomHelpFormatter(argparse.HelpFormatter):
 
 
 if __name__ == '__main__':
-
     parser = argparse.ArgumentParser(prog='tu', formatter_class=lambda prog: _CustomHelpFormatter(prog))
 
     parser.add_argument('fpaths', type=pathlib.Path, nargs='*',
