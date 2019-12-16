@@ -18,7 +18,10 @@ from itertools import repeat, chain
 from functools import partial
 from collections import namedtuple
 
-
+try:
+    import tqdm
+except ImportError:
+    pass
 
 
 '''=====================================================================================================================
@@ -1004,13 +1007,10 @@ class Main():
     def __pickCliCfg(args):
         cfg = namedtuple('CFG', '     show_prompt       show_progress       with_time_suffix')(
                                  args.show_prompt, args.show_progress, args.with_time_suffix)
-        if cfg.show_progress:
-            try:
-                import tqdm
-                global tqdm
-            except ImportError:
-                print('I: Progress bar won\'t show as it\'s not installed, consider `pip3.8 install tqdm`.')
-                cfg._replace(show_progress=False) # tqdm is not installed, so don't use progress bar anyway
+        if cfg.show_progress and 'tqdm' not in dir():
+            print("I: Progress bar won't be shown as it's not installed, consider `pip3.8 install tqdm`.")
+        else:
+            cfg._replace(show_progress=False) # tqdm is not installed, so don't use progress bar anyway
         return cfg
 
 
