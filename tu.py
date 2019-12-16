@@ -930,7 +930,7 @@ class Torrent():
         fparts = pathlib.Path(path).parts
         num = int(num) if int(num) > 0 else 0
         if self.check():
-            raise TorrentNotReadyError('Torrent is not ready to for indexing.')
+            raise TorrentNotReadyError('Torrent is not ready for indexing.')
 
         ret = []
         loaded_size = 0
