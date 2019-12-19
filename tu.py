@@ -50,7 +50,6 @@ Public Helper Functions
 
 def bencode(obj, enc:str='UTF-8') -> bytes:
     '''Bencode objects. Modified from <https://github.com/utdemir/bencoder>.'''
-
     if isinstance(obj, bytes):
         ret = str(len(obj)).encode(enc) + b":" + obj
     elif isinstance(obj, str):
@@ -68,12 +67,12 @@ def bencode(obj, enc:str='UTF-8') -> bytes:
                 raise TypeError(f"Expect str or bytes, not {key}:{type(key)}.")
         ret += b'e'
     else:
-        raise TypeError(f"Expect int, bytes, list or dict; not {obj}:{type(obj)}.")
+        raise TypeError(f"Expect int, bytes, list or dict, not {obj}:{type(obj)}.")
 
     return ret
 
 
-def bdecode(s:(bytes, str), encoding='ascii'):
+def bdecode(s:bytes, encoding='ascii'):
     '''Bdecode bytes. Modified from <https://github.com/utdemir/bencoder>.'''
 
     def decode_first(s):
@@ -767,7 +766,7 @@ class Torrent():
                 piece_bytes = bytes()
                 pbar = tqdm.tqdm(total=sum(fsize_list), unit='B', unit_scale=True)
                 for fpath in fpaths:
-                    with fpath.open('rb') as fobj:
+                    with fpath.open('rb', buffering=0) as fobj:
                         while (read_bytes := fobj.read(self.piece_length - len(piece_bytes))):
                             piece_bytes += read_bytes
                             if len(piece_bytes) == self.piece_length:
@@ -780,7 +779,7 @@ class Torrent():
                 sha1 = b''
                 piece_bytes = bytes()
                 for fpath in fpaths:
-                    with fpath.open('rb') as fobj:
+                    with fpath.open('rb', buffering=0) as fobj:
                         while (read_bytes := fobj.read(self.piece_length - len(piece_bytes))):
                             piece_bytes += read_bytes
                             if len(piece_bytes) == self.piece_length:
@@ -857,7 +856,7 @@ class Torrent():
             dest_fpath = spath.joinpath(*fpath)
             if dest_fpath.is_file():
                 read_quota = min(fsize, dest_fpath.stat().st_size) # we only need to load the smaller file size
-                with dest_fpath.open('rb') as dest_fobj:
+                with dest_fpath.open('rb', buffering=0) as dest_fobj:
                     while (read_bytes := dest_fobj.read(min(self.piece_length - len(piece_bytes), read_quota))):
                         piece_bytes += read_bytes
                         if len(piece_bytes) == self.piece_length: # whole piece loaded
