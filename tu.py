@@ -1004,12 +1004,11 @@ class Main():
 
     @staticmethod
     def __pickCliCfg(args):
+        if args.show_progress and 'tqdm' not in dir():
+            print("I: Progress bar won't be shown as not installed, consider `pip3.8 install tqdm`.")
+            args.show_progress=False
         cfg = namedtuple('CFG', '     show_prompt       show_progress       with_time_suffix')(
                                  args.show_prompt, args.show_progress, args.with_time_suffix)
-        if cfg.show_progress and 'tqdm' not in dir():
-            print("I: Progress bar won't be shown as it's not installed, consider `pip3.8 install tqdm`.")
-        else:
-            cfg._replace(show_progress=False) # tqdm is not installed, so don't use progress bar anyway
         return cfg
 
 
