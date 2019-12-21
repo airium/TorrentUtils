@@ -41,6 +41,10 @@ class PieceSizeUncommon(ValueError):
     pass
 
 
+class EmptySourceSize(ValueError):
+    pass
+
+
 
 
 '''=====================================================================================================================
@@ -787,7 +791,7 @@ class Torrent():
                                 piece_bytes = bytes()
                 sha1 += hash(piece_bytes) if piece_bytes else b''
         else:
-            raise ValueError(f"The source path '{spath.absolute()}' has a total size of 0.")
+            raise EmptySourceSize()
 
         # Everything looks good, let's update internal parameters
         self.name = self.name if keep_name else spath.name
@@ -1361,7 +1365,10 @@ class Main():
 
 
     def _load(self):
-        self.torrent.load(self.spath, False, self.cfg.show_progress)
+        try:
+            self.torrent.load(self.spath, False, self.cfg.show_progress)
+        except EmptySourceSize:
+            self.__exit(f"The source path '{self.spath.absolute()}' has a total size of 0.")
 
 
     def _read(self):
