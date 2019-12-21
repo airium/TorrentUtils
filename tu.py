@@ -24,6 +24,8 @@ except ImportError:
     pass
 
 
+
+
 '''=====================================================================================================================
 Helper Error Types
 ====================================================================================================================='''
@@ -1042,7 +1044,7 @@ class Main():
 
     @staticmethod
     def __pickCliCfg(args):
-        if args.show_progress and 'tqdm' not in dir():
+        if args.show_progress and 'tqdm' not in globals().keys():
             print("I: Progress bar won't be shown as not installed, consider `pip3.8 install tqdm`.")
             args.show_progress=False
         cfg = namedtuple('CFG', '     show_prompt       show_progress       with_time_suffix')(
