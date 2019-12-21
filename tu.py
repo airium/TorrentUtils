@@ -1175,11 +1175,21 @@ class Main():
     @staticmethod
     def __loadJson(jpath, mode):
         metadata = dict()
+        autoload = False
 
         if mode == 'create':
-            fpath = jpath if jpath else (
-                    _ if (_ := Path(__file__).absolute().with_suffix('.json')).is_file() else None)
-            if fpath:
+            if jpath:
+                fpath = Path(jpath).absolute()
+            else:
+                autoload = True
+                if getattr(sys, 'frozen', False):
+                    fpath = Path(sys.executable).absolute().with_suffix('.json')
+                elif __file__:
+                    fpath = Path(__file__).absolute().with_suffix('.json')
+                else:
+                    raise ValueError('Unexpected point reached in json loading, please file a bug report.')
+
+            if fpath.is_file():
                 try:
                     print(f"Loading user presets from '{fpath}'...", end=' ', flush=True)
                     d = json.loads(fpath.read_bytes())
@@ -1203,6 +1213,9 @@ class Main():
                     Main.__exit('failed (missing key)')
                 else:
                     print('succeeded')
+            else:
+                if jpath:
+                    Main.__exit(f"The supplied '{jpath}' does not exist.")
 
         return metadata
 
