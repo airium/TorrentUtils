@@ -1506,8 +1506,8 @@ if __name__ == '__main__':
                         help='load a json preset for metadata in creating torrent', metavar='path')
     parser.add_argument('--time-suffix', dest='with_time_suffix', action='store_true',
                         help='insert time to saved torrent')
-    parser.add_argument('--progress', dest='show_progress', action='store_true',
-                        help='show progress bar during creating torrent')
+    parser.add_argument('--no-progress', dest='show_progress', action='store_false',
+                        help='disable progress bar during creating torrent')
     parser.add_argument('-y', '--yes', dest='show_prompt', action='store_false',
                         help='just say yes - don\'t ask any question')
 
