@@ -4,14 +4,18 @@
 **You're welcome to try and post bug reports.**
 **API and CLI are still subject to change.**
 
-## Prerequisite
+## Requirements
+
+Run in console:
 
 ```txt
 python>=3.8
 tqdm (optional, for progress bar)
 ```
 
-## CLI
+No particular dependence to run executables released by pyinstaller.
+
+## CLI Usage
 
 ```txt
 $ python38 tu.py -h
@@ -44,35 +48,35 @@ optional arguments:
 
 ## Automatic Mode Inference and Path Sort
 
-CLI interface only accepts 1 or 2 paths depending on working mode. If `-m` or `--mode` is not supplied, working mode will be automatically inferred from supplied paths. See the table below for how CLI interface infers working mode and sorts paths.
+CLI interface determines 1 of 4 working modes (create, print, modify and verify) to run, which is supplied by user argument `-m` or `--mode`, or passively (also limitedly) inferred from the supplied paths. Each working mode requires exactly 1 or 2 paths. See the table below for how CLI interface determines working mode and sorts paths.
 
 Assume: \
-`T`: a path that looks like a torrent file. \
-`D`: a path that looks like a directory. \
-`F`: a path that looks like a regular file (not a torrent).
+`F`: a file-like path (not torrent-like) \
+`D`: a directory-like path \
+`T`: a torrent-like path path
 
 | 1: 1st path arg<br>2: 2nd path arg | 1:F/D | 1:T | 1:D<br>2:F | 1:F/D<br>2:D | 1:T<br>2:F/D | 1:F/D<br>2:T | 1:T<br>2:T | 1:F<br>2:F |
 |------------------------------------|------------------|------------------|------------------|------------------|------------------|------------------|------------------|------------|
+| CLI w/o mode<br>(=GUI Drag-Drop) | create | print | create | create | verify | verify | - | - |
 | CLI -m create | load 1<br>save 1 | load 1<br>save 1 | load 2<br>save 1 | load 1<br>save 2 | load 2<br>save 1 | load 1<br>save 2 | load 1<br>save 2 | - |
 | CLI -m print | - | read 1 | - | - | - | - | - | - |
 | CLI -m verify | - | - | - | - | read 1<br>load 2 | load 1<br>read 2 | - | - |
 | CLI -m modify | - | read 1<br>save 1 | - | - | - | - | read 1<br>save 2 | - |
-| CLI w/o mode<br>(=GUI Drag-Drop) | create | print | create | create | verify | verify | - | - |
 
 ---
 
 ## TODO and status
 
-1. Implement the progress bar for creating and verifying torrent outside of core class.
-2. Implement multi-process for faster torrent creating with mp shared memory.
+1. Move progress bar implementation outside of core class.
+2. Implement multi-process loader for faster torrent creating.
 
 ### Core API
 
 - [x] minimal torrent functionality
-- [x] common torrent metadata
-- [x] read/write torrent file
+- [x] set/get/clear common torrent metadata
+- [x] read/write torrent files
 - [x] load (rebuild) from source files
-- [x] verify source files with torrent
+- [x] verify source files against torrent
 
 ### CLI
 
