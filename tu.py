@@ -1098,14 +1098,14 @@ class Main():
         tpath = None # Torrent PATH is the path to the torrent itself
 
         # `create` mode requires 1 or 2 paths
-        # the selected source path must exist, while the torrent path can be optional
+        # spath must exist, while tpath can be virtual
         if mode == 'create':
             if len(fpaths) == 1:
                 if fpaths[0].exists():                                                              # 1:F/D/T
                     spath = fpaths[0]
                     tpath = spath.parent.joinpath(f"{spath.name}.torrent")
                 else:
-                    Main.__exit(f"The source '{fpaths[0]}' does not exist.")
+                    Main.__exit(f"E: The source path '{fpaths[0]}' does not exist.")
             elif len(fpaths) == 2:
                 if fpaths[0].isVD() and fpaths[1].isF():                                            # 1:D(v) 2:F
                     spath = fpaths[1]
@@ -1126,11 +1126,11 @@ class Main():
                     spath = fpaths[1]
                     tpath = fpaths[0]
                 else:
-                    Main.__exit('You supplied paths cannot work in `create` mode.')
+                    Main.__exit('E: You supplied paths cannot work in `create` mode.')
             else:
-                Main.__exit(f"`create` mode expects 1 or 2 paths, not {len(fpaths)}.")
+                Main.__exit(f"E: `create` mode expects 1 or 2 paths, not {len(fpaths)}.")
             if spath == tpath:                                                                      # stop 1:T=2:T
-                Main.__exit('Source and torrent path cannot be same.')
+                Main.__exit('E: Source and torrent path cannot be same.')
             if spath.is_file() and spath.suffix.lower() == '.torrent':                              # warn spath:T
                 print('W: You are likely to create torrent from torrent, which may be unexpected.')
 
@@ -1141,11 +1141,9 @@ class Main():
                 if fpaths[0].isT():
                     tpath = fpaths[0]
                 else:
-                    print(f"`print` mode expects a valid torrent path, not {fpaths[0]}.")
-                    sys.exit()
+                    Main.__exit(f"E: `print` mode expects a valid torrent path, not {fpaths[0]}.")
             else:
-                print(f"`print` mode expects exactly 1 path, not {len(fpaths)}.")
-                sys.exit()
+                Main.__exit(f"E: `print` mode expects exactly 1 path, not {len(fpaths)}.")
 
         # `verify` mode requires exactly 2 paths
         # inferred as `verify` requires both paths existing
@@ -1160,11 +1158,9 @@ class Main():
                     spath = fpaths[0]
                     tpath = fpaths[1]
                 else:
-                    print('`verify` mode expects a pair of valid source and torrent paths, but not found.')
-                    sys.exit()
+                    Main.__exit('E: `verify` mode expects a pair of valid source and torrent paths, but not found.')
             else:
-                print(f"`verify` mode expects exactly 2 paths, not {len(fpaths)}.")
-                sys.exit()
+                Main.__exit(f"E: `verify` mode expects exactly 2 paths, not {len(fpaths)}.")
 
         # `modify` mode requires 1 or 2 paths
         elif mode == 'modify':
@@ -1178,12 +1174,12 @@ class Main():
                     if spath == tpath:
                         print('W: You are likely to overwrite the source torrent, which may be unexpected.')
                 else:
-                    Main.__exit(f"`modify` mode expects a valid torrent path, not {fpaths[0]}.")
+                    Main.__exit(f"E: `modify` mode expects a valid torrent path, not {fpaths[0]}.")
             else:
-                Main.__exit(f"`modify` mode expects 1 or 2 paths, not {len(fpaths)}.")
+                Main.__exit(f"E: `modify` mode expects 1 or 2 paths, not {len(fpaths)}.")
 
         else:
-            Main.__exit('Failed to sort paths for source and torrent.')
+            Main.__exit('E: Unexpected point reached in path picker, please file a bug report.')
 
         return tpath, spath
 
