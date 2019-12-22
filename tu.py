@@ -1490,26 +1490,26 @@ if __name__ == '__main__':
                         help='mode will be inferred from paths if not specified')
     parser.add_argument('-t', '--tracker', dest='tracker_list', type=str, action='extend', nargs='+',
                         help='trackers can be supplied multiple times', metavar='url')
+    parser.add_argument('-c', '--comment', dest='comment', type=str,
+                        help='your message to show in various clients', metavar='text')
     parser.add_argument('-s', '--piece-size', dest='piece_size', type=int,
                         help='piece size in KiB (default: 4096)', metavar='number')
-    parser.add_argument('-c', '--comment', dest='comment', type=str,
-                        help='the message displayed in various clients', metavar='text')
     parser.add_argument('-p', '--private', dest='private', type=int, choices={0, 1},
                         help='private torrent if 1 (default: 0)')
     parser.add_argument('--by', dest='created_by', type=str,
-                        help='override `created by` message', metavar='text')
+                        help='set the creator of the torrent (default: TorrentUtils)', metavar='text')
     parser.add_argument('--time', dest='creation_date', type=int,
-                        help='override the time in sec since 19700101 (default: now)', metavar='number')
-    parser.add_argument('--source', dest='source', type=str,
-                        help='override source message and change torrent hash', metavar='text')
+                        help='set the time in second since 19700101 (default: now)', metavar='number')
     parser.add_argument('--encoding', dest='encoding', type=str,
-                        help='override text encoding (recommend: UTF-8)', metavar='text')
+                        help='set the text encoding (default&recommended: UTF-8)', metavar='text')
+    parser.add_argument('--source', dest='source', type=str,
+                        help='set the special source message (will change hash)', metavar='text')
     parser.add_argument('--json', dest='json', type=Path,
-                        help='load a json preset for metadata in creating torrent', metavar='path')
-    parser.add_argument('--time-suffix', dest='with_time_suffix', action='store_true',
-                        help='insert time to saved torrent')
+                        help='load a json for metadata preset in creating torrent', metavar='path')
     parser.add_argument('--no-progress', dest='show_progress', action='store_false',
-                        help='disable progress bar during creating torrent')
+                        help='disable progress bar in creating torrent')
+    parser.add_argument('--time-suffix', dest='with_time_suffix', action='store_true',
+                        help='append current time to torrent filename')
     parser.add_argument('-y', '--yes', dest='show_prompt', action='store_false',
                         help='just say yes - don\'t ask any question')
 

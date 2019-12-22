@@ -31,16 +31,16 @@ optional arguments:
   -h, --help                               show this help message and exit
   -m, --mode {create,print,verify,modify}  mode will be inferred from paths if not specified
   -t, --tracker url [url ...]              trackers can be supplied multiple times
+  -c, --comment text                       your message to show in various clients
   -s, --piece-size number                  piece size in KiB (default: 4096)
-  -c, --comment text                       the message displayed in various clients
   -p, --private {0,1}                      private torrent if 1 (default: 0)
-  --by text                                override `created by` message
-  --time number                            override the second since 19700101 (default: now)
-  --source text                            override source message and change torrent hash
-  --encoding text                          override text encoding (recommended: UTF-8)
-  --json path                              load a json preset for metadata in creating torrent
-  --time-suffix                            insert time between torrent filename and extension
-  --progress                               show progress bar during creating torrent
+  --by text                                set the creator of the torrent (default: TorrentUtils)
+  --time number                            set the time in second since 19700101 (default: now)
+  --encoding text                          set the text encoding (default&recommended: UTF-8)
+  --source text                            set the special source message (will change hash)
+  --json path                              load a json for metadata preset in creating torrent
+  --no-progress                            disable progress bar in creating torrent
+  --time-suffix                            append current time to torrent filename
   -y, --yes                                just say yes - don't ask any question
 ```
 
