@@ -1033,7 +1033,7 @@ class Main():
         # extract cli config from cli arguments
         self.cfg = self.__pickCliCfg(args)
         # infer `mode` from the properties of supplied paths if not specified by the user
-        self.mode = args.mode if args.mode else self.__inferMode(args.fpaths)
+        self.mode = self.__pickMode(args.mode, args.fpaths)
         # pick the most appropriate paths for torrent and source path
         self.tpath, self.spath = self.__pickPath(args.fpaths, self.mode)
         # try loading user-defined preset for metadata
@@ -1053,32 +1053,42 @@ class Main():
 
 
     @staticmethod
-    def __inferMode(fpaths):
-        '''Infer working mode from paths is limited: some modes cannot be inferred.'''
+    def __pickMode(mode, fpaths):
+        '''Pick mode from paths is limited: some modes cannot be inferred.'''
+        if mode:
 
-        if len(fpaths) == 1:
-            if fpaths[0].isD() or fpaths[0].isF():                                                  # 1:F/D -> c
-                return 'create'
-            elif fpaths[0].isT():                                                                   # 1:T -> p
-                return 'print'
+            if mode not in ('create', 'print', 'modify', 'verify'):
+                Main.__exit('E: unexpected error in mode picker, please file a bug report.')
+
+        else: # mode == False
+
+            if len(fpaths) == 1:
+                if fpaths[0].isD() or fpaths[0].isF():                                              # 1:F/D -> c
+                    mode = 'create'
+                elif fpaths[0].isT():                                                               # 1:T -> p
+                    mode = 'print'
+                else:
+                    Main.__exit(f"E: You supplied '{fpaths[0]}' cannot suggest a working mode as it does not exist.")
+
+            elif len(fpaths) == 2:
+                # inferred as `create` mode requires 1 existing and 1 virtual path
+                if fpaths[0].isVD() and fpaths[1].isF():                                            # 1:D(v) 2:F = c
+                    mode = 'create'
+                elif (fpaths[0].isF() or fpaths[0].isD()) and fpaths[1].isVD():                     # 1:F/D 2:D(v) = c
+                    mode = 'create'
+                # inferred as `verify` requires both paths existing
+                elif fpaths[0].isT() and (fpaths[1].isF() or fpaths[1].isD()):                      # 1:T 2:F/D = v
+                    mode = 'verify'
+                elif (fpaths[0].isF() or fpaths[0].isD()) and fpaths[1].isT():                      # 1:F/D 2:T = v
+                    mode = 'verify'
+                else:
+                    Main.__exit(f"E: You supplied '{fpaths[0]}' and '{fpaths[1]}' cannot suggest a working mode.")
+
             else:
-                Main.__exit('Unexpected point reached.')
+                Main.__exit(f"E: Expect 1 or 2 positional paths, not {len(fpaths)}.")
 
-        elif len(fpaths) == 2:
-            # inferred as `create` mode requires 1 existing and 1 virtual path
-            if fpaths[0].isVD() and fpaths[1].isF():                                                # 1:D(v) 2:F = c
-                return 'create'
-            if (fpaths[0].isF() or fpaths[0].isD()) and fpaths[1].isVD():                           # 1:F/D 2:D(v) = c
-                return 'create'
-            # inferred as `verify` requires both paths existing
-            if fpaths[0].isT() and (fpaths[1].isF() or fpaths[1].isD()):                            # 1:T 2:F/D = v
-                return 'verify'
-            if (fpaths[0].isF() or fpaths[0].isD()) and fpaths[1].isT():                            # 1:F/D 2:T = v
-                return 'verify'
-
-        else:
-            Main.__exit('Supplied paths does not suggest any working mode.')
-
+        print(f"I: Working mode is '{mode}'.")
+        return mode
 
 
     @staticmethod
