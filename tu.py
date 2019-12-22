@@ -770,7 +770,7 @@ class Torrent():
             if show_progress: # TODO: stdout is dirty in core class method and should be moved out in the future
                 sha1 = b''
                 piece_bytes = bytes()
-                pbar = tqdm.tqdm(total=sum(fsize_list), unit='B', unit_scale=True)
+                pbar = tqdm.tqdm(total=sum(fsize_list), unit='B', unit_scale=True, ascii=True)
                 for fpath in fpaths:
                     with fpath.open('rb', buffering=0) as fobj:
                         while (read_bytes := fobj.read(self.piece_length - len(piece_bytes))):
