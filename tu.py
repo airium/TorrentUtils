@@ -1295,7 +1295,11 @@ class Main():
                         print('W: tracker list is not loaded as incorrect format.')
                 if d.get('comment'): metadata['comment'] = str(d.get('comment'))
                 if d.get('created_by'): metadata['created_by'] = str(d.get('created_by'))
-                if d.get('creation_date'): metadata['creation_date'] = int(d.get('creation_date'))
+                if d.get('creation_date'):
+                    if fpath.suffix == '.torrent':
+                        pass
+                    else:
+                        metadata['creation_date'] = int(d.get('creation_date'))
                 if d.get('encoding'): metadata['encoding'] = str(d.get('encoding'))
                 if d.get('piece_size'):
                     metadata['piece_size'] = int(d.get('piece_size'))
