@@ -1223,8 +1223,6 @@ class Main():
         # inferred as `verify` requires both paths existing
         elif mode == 'verify':
             if len(fpaths) == 2:
-                print(fpaths[0].isT(), fpaths[0].isF(), fpaths[0].isD())
-                print(fpaths[1].isT(), fpaths[1].isF(), fpaths[1].isD())
                 if fpaths[0].isT() and (fpaths[1].isF() or fpaths[1].isD()):
                     spath = fpaths[1]
                     tpath = fpaths[0]
@@ -1282,7 +1280,7 @@ class Main():
         # try read the preset file
         if preset_path:
             try:
-                print(f"Loading user presets from '{preset_path}'...", end=' ', flush=True)
+                print(f"I: Loading user presets from '{preset_path}'...", end=' ', flush=True)
                 if preset_path.suffix == '.torrent':
                     (d := Torrent()).read(preset_path)
                 elif preset_path.suffix == '.json':
@@ -1383,7 +1381,7 @@ class Main():
 
     def __call__(self):
         if self.mode == 'create':
-            print(f"Creating torrent from '{self.spath}'.")
+            print(f"I: Creating torrent from '{self.spath}'.")
             self._set()
             self._load()
             self._write()
@@ -1391,13 +1389,13 @@ class Main():
             self._read()
             self._print()
         elif self.mode == 'verify':
-            print('Verifying Source files with Torrent.')
-            print(f"S: '{self.spath}'")
-            print(f"T: '{self.tpath}'")
+            print('I: Verifying Source files with Torrent.')
+            print(f"Source: '{self.spath}'")
+            print(f"Torrent: '{self.tpath}'")
             self._read()
             self._verify()
         elif self.mode == 'modify':
-            print(f"Modifying torrent '{self.spath}'.")
+            print(f"I: Modifying torrent '{self.spath}'.")
             self._read()
             self._set()
             self._write()
@@ -1545,15 +1543,15 @@ class Main():
             f"{'.' + time.strftime('%y%m%d-%H%M%S') if self.cfg.with_time_suffix else ''}.torrent")
         try:
             self.torrent.write(fpath, overwrite=False)
-            print(f"Torrent saved to '{fpath}'.")
+            print(f"I: Torrent saved to '{fpath}'.")
         except FileExistsError as e:
             if self.__prompt(f"The target file '{fpath}' already exists. Overwrite? (y/N): "):
                 self.torrent.write(fpath, overwrite=True)
-                print(f"Torrent saved to '{fpath}' (overwritten).")
+                print(f"I: Torrent saved to '{fpath}' (overwritten).")
             else:
                 self.__exit()
         except IsADirectoryError as e:
-            self.__exit(f"The target '{fpath}' is a directory.")
+            self.__exit(f"E: The target '{fpath}' is a directory.")
 
 
 
