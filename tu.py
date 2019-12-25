@@ -178,6 +178,7 @@ class Torrent():
     '''-----------------------------------------------------------------------------------------------------------------
     Basic properties that mimic keys in an actual torrent, providing a straightforward access (except `info`).
     If the return value is `False`, the key does not exist.
+    Note that `get()` method does not handle all of these properties.
     -----------------------------------------------------------------------------------------------------------------'''
 
 
@@ -361,6 +362,92 @@ class Torrent():
 
 
     @property
+    def hash(self) -> str:
+        '''Return the torrent hash at the moment. Read-only.'''
+        return hash(bencode(self.info_dict, self.encoding)).hex()
+
+
+    @property
+    def magnet(self) -> str:
+        '''Return the magnet link of the torrent. Read-only.'''
+        ret = f"magnet:?xt=urn:btih:{self.hash}"
+        if self.name:
+            ret += f"&dn={urllib.parse.quote(self.name)}"
+        if self.size:
+            ret += f"&xl={self.size}"
+        for url in self.tracker_list:
+            ret += f"&tr={urllib.parse.quote(url)}"
+        return ret
+
+
+    def get(self, key, ret=None):
+        '''Get various metadata with more flexible key aliases:
+
+            tracker: t, tr, tracker, trackers, tl, trackerlist, announce, announces, announcelist
+            comment: c, comm, comment, comments
+            creator: b, by, createdby, creator, tool, creatingtool
+            date: d, date, time, second, seconds, creationdate, creationtime, creatingdate, creatingtime
+            encoding: e, enc, encoding, codec
+            name: n, name, torrentname
+            piece size: ps, pl, piecesize, piecelength
+            private: p, private, privatetorrent, torrentprivate, pub, public, publictorrent, torrentpublic
+            source: s, src, source
+            filelist: fl, filelist
+            size: ssz, sourcesize, sourcesz, size
+            torrentsize: tsz, torrentsize, torrentsz
+            numpieces: np, numpiece, numpieces
+            numfiles: nf, numfile, numfiles
+            hash: th, torrenthash, sha1, hash
+            magnet: magnet, magnetlink, magneturl
+
+        All alias are case-insensitive.
+        All whitespaces and underscores will be stripped (e.g. dA_te == date).
+        Same as calls to properties, this method does not raise error on key inexistence, but return None(default).
+        '''
+        key = re.sub(r'[\s_]', '', key).lower()
+        if key in ('t', 'tr', 'tracker', 'trackers', 'trackerlist', 'announce', 'announces', 'announcelist'):
+            ret = self.tracker_list
+        elif key in ('c', 'comment', 'comments'):
+            ret = self.comment
+        elif key in ('b', 'by', 'createdby', 'creator', 'tool', 'creatingtool'):
+            ret = self.created_by
+        elif key in ('d', 'date', 'time', 'second', 'seconds', 'creationdate', 'creationtime', 'creatingdate', 'creatingtime'):
+            ret = self.creation_date
+        elif key in ('e', 'enc', 'encoding', 'codec'):
+            ret = self.encoding
+        elif key in ('n', 'name', 'torrentname'):
+            ret = self.name
+        elif key in ('ps', 'pl', 'piecesize', 'piecelength'):
+            ret = self.piece_length
+        elif key in ('p', 'private', 'privatetorrent', 'torrentprivate'):
+            ret = self.private
+        elif key in ('pub', 'public', 'publictorrent', 'torrentpublic'):
+            ret = not self.private
+        elif key in ('s', 'src', 'source'):
+            ret = self.source
+        elif key in ('fl', 'filelist'):
+            ret = self.file_list
+        elif key in ('ssz', 'sourcesize', 'sourcesz', 'size'):
+            ret = self.size
+        elif key in ('tsz', 'torrentsize', 'torrentsz'):
+            ret = self.torrent_size
+        elif key in ('np', 'numpiece', 'numpieces'):
+            ret = self.num_pieces
+        elif key in ('nf', 'numfile', 'numfiles'):
+            ret = self.num_files
+        elif key in ('th', 'torrenthash', 'sha1', 'hash'):
+            ret = self.hash
+        elif key in ('magnet', 'magnetlink', 'magneturl'):
+            ret = self.magnet
+
+        return ret
+
+    '''-----------------------------------------------------------------------------------------------------------------
+    The following properties does not support `get()` method
+    -----------------------------------------------------------------------------------------------------------------'''
+
+
+    @property
     def info_dict(self) -> dict:
         '''Return the `info` dict of the torrent that affects hash. Read-only.'''
         info_dict = {}
@@ -411,23 +498,6 @@ class Torrent():
         return torrent_dict
 
 
-    @property
-    def hash(self) -> str:
-        '''Return the torrent hash at the moment. Read-only.'''
-        return hash(bencode(self.info_dict, self.encoding)).hex()
-
-
-    @property
-    def magnet(self) -> str:
-        '''Return the magnet link of the torrent. Read-only.'''
-        ret = f"magnet:?xt=urn:btih:{self.hash}"
-        if self.name:
-            ret += f"&dn={urllib.parse.quote(self.name)}"
-        if self.size:
-            ret += f"&xl={self.size}"
-        for url in self.tracker_list:
-            ret += f"&tr={urllib.parse.quote(url)}"
-        return ret
 
 
     '''-----------------------------------------------------------------------------------------------------------------
