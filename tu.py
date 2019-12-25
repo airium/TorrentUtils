@@ -857,6 +857,7 @@ class Torrent():
                         pbar2.update(1)
                 sha1 += hash(piece_bytes) if piece_bytes else b''
                 pbar1.close()
+                pbar2.close()
             else: # not show progress bar
                 sha1 = b''
                 piece_bytes = bytes()
