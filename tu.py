@@ -35,6 +35,10 @@ class TorrentNotReadyError(Exception):
     pass
 
 
+class BdecodeError(ValueError):
+    pass
+
+
 class PieceSizeTooSmall(ValueError):
     pass
 
@@ -104,12 +108,12 @@ def bdecode(s:bytes, encoding='ascii'):
             end = rest_i + length
             return s[start:end], s[end:]
         else:
-            raise ValueError("Malformed input.")
+            raise BdecodeError("Malformed input.")
 
     s = s.encode(encoding) if isinstance(s, str) else s
     ret, rest = decode_first(s)
     if rest:
-        raise ValueError("Malformed input.")
+        raise BdecodeError("Malformed input.")
 
     return ret
 
@@ -1107,7 +1111,7 @@ class Main():
         # pick the most appropriate paths for torrent and source path
         self.tpath, self.spath = self.__pickPath(args.fpaths, self.mode)
         # try loading user-defined preset for metadata
-        self.metadata = self.__loadJson(args.json, self.mode)
+        self.metadata = self.__loadPreset(args.preset, self.mode)
         # extract metadata from cli arguments
         self.metadata = self.__pickMetadata(args, self.mode, self.metadata)
 
@@ -1255,49 +1259,64 @@ class Main():
 
 
     @staticmethod
-    def __loadJson(jpath, mode):
+    def __loadPreset(path, mode):
         metadata = dict()
-        autoload = False
+        if mode != 'create':
+            return metadata
 
-        if mode == 'create':
-            if jpath:
-                fpath = Path(jpath).absolute()
-            else:
-                autoload = True
-                if getattr(sys, 'frozen', False):
-                    fpath = Path(sys.executable).absolute().with_suffix('.json')
-                elif __file__:
-                    fpath = Path(__file__).absolute().with_suffix('.json')
-                else:
-                    raise ValueError('Unexpected point reached in json loading, please file a bug report.')
+        # prepare a preset candidate to read
+        preset_path = None
+        if path:
+            preset_path = Path(path).absolute()
+            if not preset_path.is_file():
+                Main.__exit(f"The preset file '{path}' does not exist.")
+            if preset_path.suffix not in ('.json', '.torrent'):
+                Main.__exit(f"E: Expect json or torrent to read presets, not '{path}'.")
+        else:
+            exec_path = sys.executable if getattr(sys, 'frozen', False) else __file__
+            for ext in ('.json', '.torrent'):
+                if (_ := Path(exec_path).absolute().with_suffix(ext)).is_file():
+                    preset_path = _
+                    break
 
-            if fpath.is_file():
-                try:
-                    print(f"Loading user presets from '{fpath}'...", end=' ', flush=True)
-                    d = json.loads(fpath.read_bytes())
-                    if d.get('tracker_list') and \
-                    isinstance(d['tracker_list'], list) and all(isinstance(i, str) for i in d['tracker_list']):
-                        metadata['tracker_list'] = d['tracker_list']
-                    if d.get('comment'): metadata['comment'] = str(d['comment'])
-                    if d.get('created_by'): metadata['created_by'] = str(d['created_by'])
-                    if d.get('creation_date'): metadata['creation_date'] = int(d['creation_date'])
-                    if d.get('encoding'): metadata['encoding'] = str(d['encoding'])
-                    if d.get('piece_size'): metadata['piece_size'] = int(d['piece_size']) << 10
-                    if d.get('private'): metadata['private'] = int(d['private'])
-                    if d.get('source'): metadata['source'] = str(d['source'])
-                except FileNotFoundError:
-                    Main.__exit('failed (file not found)')
-                except UnicodeDecodeError:
-                    Main.__exit('failed (invalid file)')
-                except json.decoder.JSONDecodeError:
-                    print('failed (invalid json)')
-                except KeyError:
-                    Main.__exit('failed (missing key)')
+        # try read the preset file
+        if preset_path:
+            try:
+                print(f"Loading user presets from '{preset_path}'...", end=' ', flush=True)
+                if preset_path.suffix == '.torrent':
+                    (d := Torrent()).read(preset_path)
+                elif preset_path.suffix == '.json':
+                    d = json.loads(preset_path.read_bytes())
                 else:
-                    print('succeeded')
+                    Main.__exit('E: Unexpected point reached in loading preset, please file a bug report.')
+
+                if _ := d.get('tracker_list'):
+                    if isinstance(_, list) and all(isinstance(i, str) for i in _):
+                        metadata['tracker_list'] = _
+                    else:
+                        print('W: tracker list is not loaded as incorrect format.')
+                if d.get('comment'): metadata['comment'] = str(d.get('comment'))
+                if d.get('created_by'): metadata['created_by'] = str(d.get('created_by'))
+                if d.get('creation_date'): metadata['creation_date'] = int(d.get('creation_date'))
+                if d.get('encoding'): metadata['encoding'] = str(d.get('encoding'))
+                if d.get('piece_size'):
+                    metadata['piece_size'] = int(d.get('piece_size'))
+                    if preset_path.suffix != '.torrent':
+                        metadata['piece_size'] = int(d.get('piece_size')) << 10
+                if d.get('private'): metadata['private'] = int(d.get('private'))
+                if d.get('source'): metadata['source'] = str(d.get('source'))
+            except FileNotFoundError:
+                Main.__exit('failed (file not found)')
+            except UnicodeDecodeError:
+                Main.__exit('failed (invalid file)')
+            except json.decoder.JSONDecodeError:
+                Main.__exit('failed (invalid file)')
+            except BdecodeError:
+                Main.__exit('failed (invalid file)')
+            except KeyError:
+                Main.__exit('failed (missing key)')
             else:
-                if jpath:
-                    Main.__exit(f"The supplied '{jpath}' does not exist.")
+                print('succeeded')
 
         return metadata
 
@@ -1580,8 +1599,8 @@ if __name__ == '__main__':
                         help='set the text encoding (default&recommended: UTF-8)', metavar='text')
     parser.add_argument('--source', dest='source', type=str,
                         help='set the special source message (will change hash)', metavar='text')
-    parser.add_argument('--json', dest='json', type=Path,
-                        help='load a json for metadata preset in creating torrent', metavar='path')
+    parser.add_argument('--preset', dest='preset', type=Path,
+                        help='load a preset file for metadata in creating torrent', metavar='path')
     parser.add_argument('--no-progress', dest='show_progress', action='store_false',
                         help='disable progress bar in creating torrent')
     parser.add_argument('--time-suffix', dest='with_time_suffix', action='store_true',
