@@ -844,7 +844,8 @@ class Torrent():
             if show_progress: # TODO: stdout is dirty in core class method and should be moved out in the future
                 sha1 = b''
                 piece_bytes = bytes()
-                pbar = tqdm.tqdm(total=sum(fsize_list), unit='B', unit_scale=True, ascii=True)
+                pbar1 = tqdm.tqdm(total=sum(fsize_list), desc='Size', unit='B', unit_scale=True, ascii=True, dynamic_ncols=True)
+                pbar2 = tqdm.tqdm(total=len(fsize_list), desc='File', unit='', ascii=True, dynamic_ncols=True)
                 for fpath in fpaths:
                     with fpath.open('rb', buffering=0) as fobj:
                         while (read_bytes := fobj.read(self.piece_length - len(piece_bytes))):
@@ -852,9 +853,10 @@ class Torrent():
                             if len(piece_bytes) == self.piece_length:
                                 sha1 += hash(piece_bytes)
                                 piece_bytes = bytes()
-                            pbar.update(len(read_bytes))
+                            pbar1.update(len(read_bytes))
+                        pbar2.update(1)
                 sha1 += hash(piece_bytes) if piece_bytes else b''
-                pbar.close()
+                pbar1.close()
             else: # not show progress bar
                 sha1 = b''
                 piece_bytes = bytes()
