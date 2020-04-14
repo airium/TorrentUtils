@@ -4,7 +4,7 @@
 **You're welcome to try and post bug reports.**
 **API and CLI are still subject to change.**
 
-**Caution**: This utility uses very up-to-date Unicode standard. Regarding some special characters like emoji, it's known to be potentially NOT compatible with old torrent makers like uTorrent 2.2.1, where the latter encodes such characters with 6 bytes in UTF-8, which is not allowed since RFC 3629 in 2003. Newer torrent downloaders may still recognise 6-byte UTF-8 characters, but old ones like uTorrent 2.2.1 will never recognise equivalent characters in latest 4-byte UTF-8. If there is any special character in filenames and you want to preserve universal compatibility, use this script carefully.
+**Caution**: TorrentUtils inherits Unicode 12.1.0 from Python 3.8. Legacy clients with Unicode version lower than 5.2, like uTorrent 2.2.1, won't recognise many special characters like emoji encoded with Unicode 5.2 or above. This means if filenames contain very special characters, torrent created by TorrentUtils (also any creators with Unicode 5.2+) may be not recognised by uTorrent 2.2.1. TorrentUtils will also fail to recognise special characters encoded by Unicode 5.1 or below e.g. from uTorrent 2.2.1, as higher Unicode standard overrides lower ones without compatibility guarantee.
 
 ## Requirements
 
