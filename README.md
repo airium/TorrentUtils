@@ -1,21 +1,19 @@
 # TorrentUtils = tu
 
-**All major functions should work now.**
-**You're welcome to try and post bug reports.**
-**API and CLI are still subject to change.**
+[中文README](README.CN.md)
 
-**Caution**: TorrentUtils inherits Unicode 12.1.0 from Python 3.8. Legacy clients with Unicode version lower than 5.2, like uTorrent 2.2.1, won't recognise many special characters like emoji encoded with Unicode 5.2 or above. This means if filenames contain very special characters, torrent created by TorrentUtils (also any creators with Unicode 5.2+) may be not recognised by uTorrent 2.2.1. TorrentUtils will also fail to recognise special characters encoded by Unicode 5.1 or below e.g. from uTorrent 2.2.1, as higher Unicode standard overrides lower ones without compatibility guarantee.
+**All major functions should work now. You're welcome to try and post bug reports. API and CLI are still subject to change.**
+
+**Caution**: Legacy clients with Unicode version lower than 5.2.0, e.g. uTorrent 2.2.1, won't recognise special characters like emoji encoded with Unicode 5.2 or above, whereas TorrentUtils uses Unicode 12.1.0 from Python 3.8. This means if filenames contain many special characters, you should be careful that torrent created by TorrentUtils (also any creators with Unicode 5.2+) may be not recognised by uTorrent 2.2.1 (though in most cases it should be OK). TorrentUtils won't recognise special characters encoded by Unicode 5.1 or below either, as Python 3 is designated to raise error in this case, in addition that very early Python 3 releases like Python 3.1 already used Unicode 6.0.0. Script to upgrade torrents in old Unicode versions is possible in the future, but it will change torrent SHA1 (anyway it should always avoid using special characters in filenames).
 
 ## Requirements
-
-Run in console:
 
 ```txt
 python>=3.8
 tqdm (optional, for progress bar)
 ```
 
-No particular dependence to run executables released by pyinstaller.
+Nothing needed if you just use the released executables.
 
 ## CLI Usage
 
@@ -48,26 +46,26 @@ optional arguments:
 
 ---
 
-## Automatic Mode Inference and Path Sort
+## Automatic Mode Inference and Path Selector
 
-CLI interface determines 1 of 4 working modes (create, print, modify and verify) to run, which is supplied by user argument `-m` or `--mode`, or passively (also limitedly) inferred from the supplied paths. Each working mode requires exactly 1 or 2 paths. See the table below for how CLI interface determines working mode and sorts paths.
+If not given working mode via -m argument, this utility will infer one from the paths you give, and also which path to load/read/save. The rules are given below:
 
-Assume: \
-`F`: a file-like path (not torrent-like) \
-`D`: a directory-like path \
-`T`: a torrent-like path path
+Abbr: \
+`F`/`D`/`T` = a file-like path (not torrent-like) / a directory-like path / a torrent-like path path \
+`1`/`2` = the first path you input / the second path you input (if) \
+`L`/`R`/`W` = Load files from / Read torrent from / Write torrent to
 
-| 1: 1st path arg<br>2: 2nd path arg | 1:F/D | 1:T | 1:D<br>2:F | 1:F/D<br>2:D | 1:T<br>2:F/D | 1:F/D<br>2:T | 1:T<br>2:T | 1:F<br>2:F |
-|------------------------------------|------------------|------------------|------------------|------------------|------------------|------------------|------------------|------------|
-| CLI w/o mode<br>(=GUI Drag-Drop) | create | print | create | create | verify | verify | - | - |
-| CLI -m create | load 1<br>save 1 | load 1<br>save 1 | load 2<br>save 1 | load 1<br>save 2 | load 2<br>save 1 | load 1<br>save 2 | load 1<br>save 2 | - |
-| CLI -m print | - | read 1 | - | - | - | - | - | - |
-| CLI -m verify | - | - | - | - | read 1<br>load 2 | load 1<br>read 2 | - | - |
-| CLI -m modify | - | read 1<br>save 1 | - | - | - | - | read 1<br>save 2 | - |
+| CLI -m argument                | 1:F/D      | 1:T        | 1:D<br>2:F | 1:F/D<br>2:D | 1:T<br>2:F/D | 1:F/D<br>2:T | 1:T<br>2:T | 1:F<br>2:F |
+| ------------------------------ | ---------- | ---------- | ---------- | ------------ | ------------ | ------------ | ---------- | ---------- |
+| not given or<br> GUI drag-drop | -m create  | -m print   | -m create  | -m create    | -m verify    | -m verify    | -          | -          |
+| -m create                      | L 1<br>W 1 | L 1<br>W 1 | L 2<br>W 1 | L 1<br>W 2   | L 2<br>W 1   | L 1<br>W 2   | R 1<br>W 2 | -          |
+| -m print                       | -          | R 1        | -          | -            | -            | -            | -          | -          |
+| -m verify                      | -          | -          | -          | -            | R 1<br>L 2   | L 1<br>R 2   | -          | -          |
+| -m modify                      | -          | R 1<br>W 1 | -          | -            | -            | -            | R 1<br>W 2 | -          |
 
 ---
 
-## TODO and status
+## TODO and Progress
 
 1. Move progress bar implementation outside of core class.
 2. Implement multi-process loader for faster torrent creating.
