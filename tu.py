@@ -1612,5 +1612,6 @@ if __name__ == '__main__':
                         help='append current time to torrent filename')
     parser.add_argument('-y', '--yes', dest='show_prompt', action='store_false',
                         help='just say yes - don\'t ask any question')
+    parser.add_argument('--version', action='version', version='TorrentUtils 0.1.0.1')
 
     Main(parser.parse_args())()
