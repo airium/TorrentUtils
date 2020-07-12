@@ -1299,8 +1299,8 @@ class Main():
                 if d.get('comment'): metadata['comment'] = str(d.get('comment'))
                 if d.get('created_by'): metadata['created_by'] = str(d.get('created_by'))
                 if d.get('creation_date'):
-                    if fpath.suffix == '.torrent':
-                        pass
+                    if preset_path.suffix == '.torrent':
+                        pass # don't copy date if preset is a torrent file
                     else:
                         metadata['creation_date'] = int(d.get('creation_date'))
                 if d.get('encoding'): metadata['encoding'] = str(d.get('encoding'))
