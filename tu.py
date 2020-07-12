@@ -200,12 +200,12 @@ class Torrent():
 
     @property
     def announce_list(self) -> list:
-        '''Return all trackers if more than 2, otherwise empty list.'''
+        '''Return all trackers if no less than 2, otherwise empty list.'''
         return self._tracker_lst if len(self._tracker_lst) >= 2 else []
 
     @announce_list.setter
     def announce_list(self, urls):
-        '''Set the whole tracker list, must be more than 2.'''
+        '''Set the whole tracker list, must be no less than 2.'''
         if len(urls) >= 2:
             self.setTracker(urls)
         else:
@@ -258,7 +258,7 @@ class Torrent():
 
     @property
     def files(self) -> list:
-        '''Return the list of list of file size and path parts if more than 2 files (repel `length`). Read-only.'''
+        '''Return the list of list of file size and path parts if no less than 2 files (repel `length`). Read-only.'''
         return list([fsize, fpath.parts] for fsize, fpath in zip(self._srcsize_lst, self._srcpath_lst)) \
                if len(self._srcpath_lst) >= 2 else []
 
