@@ -4,7 +4,9 @@
 
 **All major functions should work now. You're welcome to try and post bug reports. API and CLI are still subject to change.**
 
-**Caution**: Legacy clients with Unicode version lower than 5.2.0, e.g. uTorrent 2.2.1, won't recognise special characters like emoji encoded with Unicode 5.2 or above, whereas TorrentUtils uses Unicode 12.1.0 from Python 3.8. This means if filenames contain many special characters, you should be careful that torrent created by TorrentUtils (also any creators with Unicode 5.2+) may be not recognised by uTorrent 2.2.1 (though in most cases it should be OK). TorrentUtils won't recognise special characters encoded by Unicode 5.1 or below either, as Python 3 is designated to raise error in this case, in addition that very early Python 3 releases like Python 3.1 already used Unicode 6.0.0. Script to upgrade torrents in old Unicode versions is possible in the future, but it will change torrent SHA1 (anyway it should always avoid using special characters in filenames).
+**Caution**:
+
+Due to the breaking change in Unicode 5.2.0 (Oct 2009), special characters like emoji encoded with Unicode 5.2+ and 5.2- are **mutually incompatible**.  Since TorrentUtils uses Unicode 12+ from Python 3.8+, if you plan to make & run torrent with legacy clients (Unicode 5.2-), e.g. uTorrent 2.2.1, be careful to avoid special characters in filenames.
 
 ## Requirements
 
@@ -18,7 +20,7 @@ Nothing needed if you just use the released executables.
 ## CLI Usage
 
 ```txt
-$ python38 tu.py -h
+$ python3 tu.py -h
 usage: tu [-h] [-m {create,print,verify,modify}] [-t url [url ...]] [-s number] [-c text] [-p {0,1}]
           [--by text] [--time number] [--source text] [--encoding text] [--json path]
           [--time-suffix] [--progress] [-y]
@@ -48,12 +50,12 @@ optional arguments:
 
 ## Automatic Mode Inference and Path Selector
 
-If not given working mode via -m argument, this utility will infer one from the paths you give, and also which path to load/read/save. The rules are given below:
+If not given working mode via `-m`, the script will infer one from the input paths, and also which path to load/read/save. The rules are given below:
 
 Abbr: \
-`F`/`D`/`T` = a file-like path (not torrent-like) / a directory-like path / a torrent-like path path \
-`1`/`2` = the first path you input / the second path you input (if) \
-`L`/`R`/`W` = Load files from / Read torrent from / Write torrent to
+Path Args: `1`/`2` = the 1st path you input / the 2nd path you input (if) \
+Path Types: `F`/`D`/`T` = a file-like path (not torrent-like) / a directory-like path / a torrent-like path \
+Actions: `L`/`R`/`W` = Load files from / Read torrent from / Write torrent to
 
 | CLI -m argument                | 1:F/D      | 1:T        | 1:D<br>2:F | 1:F/D<br>2:D | 1:T<br>2:F/D | 1:F/D<br>2:T | 1:T<br>2:T | 1:F<br>2:F |
 | ------------------------------ | ---------- | ---------- | ---------- | ------------ | ------------ | ------------ | ---------- | ---------- |
