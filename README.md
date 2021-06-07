@@ -36,7 +36,7 @@ optional arguments:
   -c, --comment text                       your message to show in various clients
   -s, --piece-size number                  piece size in KiB (default: 4096)
   -p, --private {0,1}                      private torrent if 1 (default: 0)
-  --by text                                set the creator of the torrent (default: TorrentUtils)
+  --by text                                set the creator of the torrent (default: Github)
   --time number                            set the time in second since 19700101 (default: now)
   --encoding text                          set the text encoding (default&recommended: UTF-8)
   --source text                            set the special source message (will change hash)

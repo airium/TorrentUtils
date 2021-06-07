@@ -1122,7 +1122,7 @@ class Main():
     @staticmethod
     def __pickCliCfg(args):
         if args.show_progress and 'tqdm' not in globals().keys():
-            print("I: Progress bar won't be shown as not installed, consider `pip3.8 install tqdm`.")
+            print("I: Progress bar won't be shown as not installed, consider `python3 -m pip install tqdm`.")
             args.show_progress=False
         cfg = namedtuple('CFG', '     show_prompt       show_progress       with_time_suffix')(
                                  args.show_prompt, args.show_progress, args.with_time_suffix)
@@ -1335,7 +1335,7 @@ class Main():
             metadata['comment'] = args.comment if args.comment else (
                                        _ if (_ := metadata.get('comment')) else '')
             metadata['created_by'] = args.created_by if args.created_by else (
-                                       _ if (_ := metadata.get('created_by')) else 'TorrentUtils')
+                                       _ if (_ := metadata.get('created_by')) else 'https://github.com/airium/TorrentUtils')
             metadata['creation_date'] = args.creation_date if args.creation_date else (
                                        _ if (_ := metadata.get('creation_date')) else int(time.time()))
             metadata['encoding'] = args.encoding if args.encoding else (
@@ -1597,7 +1597,7 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--private', dest='private', type=int, choices={0, 1},
                         help='private torrent if 1 (default: 0)')
     parser.add_argument('--by', dest='created_by', type=str,
-                        help='set the creator of the torrent (default: TorrentUtils)', metavar='text')
+                        help='set the creator of the torrent (default: Github)', metavar='text')
     parser.add_argument('--time', dest='creation_date', type=int,
                         help='set the time in second since 19700101 (default: now)', metavar='number')
     parser.add_argument('--encoding', dest='encoding', type=str,
@@ -1612,6 +1612,6 @@ if __name__ == '__main__':
                         help='append current time to torrent filename')
     parser.add_argument('-y', '--yes', dest='show_prompt', action='store_false',
                         help='just say yes - don\'t ask any question')
-    parser.add_argument('--version', action='version', version='TorrentUtils 0.1.0.1')
+    parser.add_argument('--version', action='version', version='TorrentUtils 0.1.0.2')
 
     Main(parser.parse_args())()
