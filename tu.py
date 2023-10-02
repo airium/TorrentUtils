@@ -5,16 +5,16 @@ import math
 import time
 import json
 import codecs
-import urllib
 import shutil
 import string
 import hashlib
 import pathlib
-import warnings
+
 import argparse
+import urllib.parse
 
 from operator import methodcaller
-from itertools import repeat, chain
+from itertools import chain
 from functools import partial
 from collections import namedtuple
 
@@ -83,7 +83,7 @@ def bencode(obj, enc: str = 'UTF-8') -> bytes:
     return ret
 
 
-def bdecode(s: bytes, encoding='ascii'):
+def bdecode(s: bytes, encoding='utf-8') -> dict | list | str | int:
     '''Bdecode bytes. Modified from <https://github.com/utdemir/bencoder>.'''
 
     def decode_first(s):
@@ -532,7 +532,7 @@ class Torrent():
                 try:
                     idx = self._tracker_lst.index(url)
                 except ValueError:  # not found, add it
-                    self.append(url)
+                    self._tracker_lst.append(url)
                 else:  # found, no need to update its position
                     pass
 
@@ -725,8 +725,10 @@ class Torrent():
         if not tpath.is_file():
             raise FileNotFoundError(f"The supplied '{tpath}' does not exist.")
         torrent_dict = bdecode(tpath.read_bytes())
+        if not isinstance(torrent_dict, dict):
+            raise TypeError(f"The supplied '{tpath}' contains no valid content.")
 
-        # we need to know encoding first
+        # we need to know the encoding first
         encoding = torrent_dict.get(b'encoding', b'UTF-8').decode()  # str
 
         # tracker list
@@ -739,13 +741,14 @@ class Torrent():
         comment = torrent_dict.get(b'comment', b'').decode(encoding)  # str
         created_by = torrent_dict.get(b'created by', b'').decode(encoding)  # str
         creation_date = torrent_dict.get(b'creation date', 0)  # int
-        files = torrent_dict.get(b'info').get(b'files', [])  # list
-        length = torrent_dict.get(b'info').get(b'length', 0)  # int
-        name = torrent_dict.get(b'info').get(b'name', b'').decode(encoding)  # str
-        piece_length = torrent_dict.get(b'info').get(b'piece length', 0)  # int
-        pieces = torrent_dict.get(b'info').get(b'pieces', b'')  # str
-        private = torrent_dict.get(b'info').get(b'private', 0)  # int
-        source = torrent_dict.get(b'info').get(b'source', b'').decode(encoding)  # str
+        torrent_dict : dict = torrent_dict.get(b'info', {})
+        files = torrent_dict.get(b'files', [])  # list
+        length = torrent_dict.get(b'length', 0)  # int
+        name = torrent_dict.get(b'name', b'').decode(encoding)  # str
+        piece_length = torrent_dict.get(b'piece length', 0)  # int
+        pieces = torrent_dict.get(b'pieces', b'')  # str
+        private = torrent_dict.get(b'private', 0)  # int
+        source = torrent_dict.get(b'source', b'').decode(encoding)  # str
 
         # everything looks good, now let's write attributes
         self.setTracker(trackers)
@@ -1610,6 +1613,6 @@ if __name__ == '__main__':
                         help='append current time to torrent filename')
     parser.add_argument('-y', '--yes', dest='show_prompt', action='store_false',
                         help='just say yes - don\'t ask any question')
-    parser.add_argument('--version', action='version', version='TorrentUtils 0.1.0.2')
+    parser.add_argument('--version', action='version', version='TorrentUtils 0.2.0.20230208')
 
     Main(parser.parse_args())()
