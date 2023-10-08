@@ -1,20 +1,21 @@
+from __future__ import annotations
+
 import re
 import os
 import math
 import time
 import codecs
-import hashlib
-import pathlib
 import warnings
 import urllib.parse
+from pathlib import Path, PurePath
+from threading import Thread, Lock, Event
 from dataclasses import dataclass
 from operator import methodcaller
-from typing import Iterable, Optional, TypedDict, Any, Set
+from typing import Iterable, Optional, Any
 
-try:
-    import tqdm
-except ImportError:
-    pass
+from .hasher import toSHA1
+from .bencoder import bencode, bdecode
+from . import torrent_job as trtjob
 
 try:
     import dateutil.parser
@@ -22,52 +23,8 @@ try:
 except ImportError:
     HAS_DATEUTIL = False
 
-from bencoder import bencode, bdecode
-
-
 _ASCII = re.compile(r'[a-z0-9]+', re.IGNORECASE)
-
-
-
-
-def _hash(bchars: bytes) -> bytes:
-    '''Return the sha1 hash for the given bytes.'''
-    if isinstance(bchars, bytes):
-        hasher = hashlib.sha1()
-        hasher.update(bchars)
-        return hasher.digest()
-    else:
-        raise TypeError(f"Expect bytes, not {type(bchars)}.")
-
-
-
-
-class TorrentNotReady(Exception):
-    pass
-
-
-
-
-class PieceSizeTooSmall(ValueError):
-    pass
-
-
-
-
-class PieceSizeTooLarge(ValueError):
-    pass
-
-
-
-
-class PieceSizeUncommon(ValueError):
-    pass
-
-
-
-
-class EmptySourceSize(ValueError):
-    pass
+_INVALID_CHARS = re.compile(r'(\s|[\/:*?"<>|])')
 
 
 
@@ -75,7 +32,7 @@ class EmptySourceSize(ValueError):
 def fromTorrent(path):
     '''Wrapper function to read a torrent file and return it.'''
     torrent = Torrent()
-    torrent.read(pathlib.Path(path))
+    torrent.read(Path(path))
     return torrent
 
 
@@ -84,15 +41,8 @@ def fromTorrent(path):
 def fromFiles(path):
     '''Wrapper function to load files as a torrent and return it.'''
     torrent = Torrent()
-    torrent.load(pathlib.Path(path))
+    torrent.load(Path(path))
     return torrent
-
-
-
-
-'''=====================================================================================================================
-Core Torrent Class
-====================================================================================================================='''
 
 
 
@@ -100,7 +50,8 @@ Core Torrent Class
 @dataclass
 class _TorrentMeta():
 
-    '''The basic yet most common dict of the torrent'''
+    '''The basic yet most common metadata of a torrent'''
+
     trackers: list[str] = []  # the list of tracker urls
     comment: str = ''  # the comment message'
     creator: str = ''  # the creator of the torrent
@@ -114,8 +65,9 @@ class _TorrentMeta():
 @dataclass
 class _TorrentInfo():
 
-    '''the `info` dict of the torrent'''
-    files: list[tuple[pathlib.PurePath, int]] = []  # the list of list of file size and path parts
+    '''The required and most common metadata in torrent's info dict.'''
+
+    files: list[tuple[tuple[str, ...], int]] = []  # the list of tuple of path parts and file size
     name: str = ''  # the root name of the torrent
     piece_length: int = 4096 << 10  # the piece size in bytes
     pieces: bytes = b''  # the long raw bytes of pieces' sha1
@@ -125,9 +77,14 @@ class _TorrentInfo():
 
 
 
-class FileInfo(TypedDict):
+@dataclass
+class _FileInfo():
     path: tuple[str, ...]
     size: int
+
+    @property
+    def info(self) -> tuple[tuple[str, ...], int]:
+        return (self.path, self.size)
 
 
 
@@ -140,8 +97,46 @@ class Torrent():
         '''
         self._meta: _TorrentMeta = _TorrentMeta()
         self._info: _TorrentInfo = _TorrentInfo()
-        self._misc: dict = {}
+        self._misc: dict[str, Any] = {}  # this is used to save other non-standard metadata
         self.set(**torrent_set_kwargs)
+
+        self._write_jobs: list[trtjob.TorrentJob] = []
+        self._write_lock: Lock = Lock()
+        self._job_can_start: Event = Event()
+        self._job_is_running: Event = Event()
+
+        self._job_thread = Thread(target=self._job_worker, daemon=True)
+        self._job_thread.start()
+
+    def _job_worker(self):
+        next_job_idx: int = 0
+        while True:
+            self._job_can_start.wait()
+            self._job_can_start.clear()
+            with self._write_lock:
+                while len(self._write_jobs) >= next_job_idx:
+                    self._job_is_running.set()
+                    next_job = self._write_jobs[next_job_idx]
+                    next_job.start()
+                    next_job_idx += 1
+                    if len(self._write_jobs) < next_job_idx:
+                        self._job_is_running.clear()
+
+    @property
+    def current_job(self) -> Optional[trtjob.TorrentJob]:
+        raise NotImplementedError('This function is not implemented yet.')
+
+    @property
+    def last_job(self) -> Optional[trtjob.TorrentJob]:
+        raise NotImplementedError('This function is not implemented yet.')
+
+    @property
+    def jobs(self) -> list[trtjob.TorrentJob]:
+        return self._write_jobs[:]
+
+    def _addJob(self, job: trtjob.TorrentJob):
+        self._write_jobs.append(job)
+        self._job_can_start.set()
 
     #* -----------------------------------------------------------------------------------------------------------------
     #* The following properties mimic the keys existing in an actual torrent.
@@ -213,7 +208,7 @@ class Torrent():
     @property
     def hash(self) -> str:
         '''Return the torrent hash at the moment. Read-only.'''
-        return _hash(bencode(self.info_dict, self.encoding)).hex()
+        return toSHA1(bencode(self.info_dict, self.encoding)).hex()
 
     @property
     def files(self) -> list[dict[str, int|tuple[str, ...]]]:
@@ -221,8 +216,9 @@ class Torrent():
         Return a list of dict of file size and path parts if files number >=2. Read-only.
         Corresponding to torrent['info']['files'] in an actual torrent.
         '''
-        return list({'path': fpath.parts, 'length': fsize} for (fpath, fsize) in self._info.files) \
-               if len(self._info.files) > 1 else []
+        return list({
+            'path': fparts, 'length': fsize
+            } for (fparts, fsize) in self._info.files) if len(self._info.files) > 1 else []
 
     @property
     def length(self) -> int:
@@ -318,9 +314,9 @@ class Torrent():
         return len(self._meta.trackers)
 
     @property
-    def file_list(self) -> list[FileInfo]:
+    def file_list(self) -> list[_FileInfo]:
         '''Unlike `length` and `files`, this function always returns the full list of dict of file parts and size. Read-only.'''
-        return list(FileInfo(path=fpath.parts, size=fsize) for (fpath, fsize) in self._info.files)
+        return list(_FileInfo(path=parts, size=fsize) for (parts, fsize) in self._info.files)
 
     @property
     def size(self) -> int:
@@ -437,6 +433,12 @@ class Torrent():
     #* -----------------------------------------------------------------------------------------------------------------
 
     @property
+    def pieces_hashes(self) -> list[bytes]:
+        '''Return the list of piece hashes. Read-only.'''
+        pieces = self._info.pieces[:]
+        return [pieces[i:i + 20] for i in range(0, len(pieces), 20)]
+
+    @property
     def info_dict(self) -> dict[str, Any]:
         '''Return the `info` dict of the torrent that affects hash. Read-only.'''
         ret: dict[str, Any] = {}
@@ -466,148 +468,206 @@ class Torrent():
 
     #* -----------------------------------------------------------------------------------------------------------------
     #* Property setters and editors
+    #! All methods that modifies the torrent info (= write) will only do an input check and add a job to the queue.
+    #! Check the returned `TorrentJob` instance to monitor the result.
     #* -----------------------------------------------------------------------------------------------------------------
 
-    def addTracker(self, urls: str|Iterable[str], top=True):
+    @staticmethod
+    def chkTracker(urls: str|Iterable[str]) -> list[str]:
+        '''Check the input tracker(s), return a list version of the input.'''
+        # TODO: add url check
+        urls = [urls] if isinstance(urls, str) else list(urls)
+        if not all(isinstance(url, str) for url in urls): raise TypeError('Some supplied tracker is non-str.')
+        if not all(urls): raise ValueError('Tracker url cannot be empty.')
+        return urls
+
+    def addTracker(self, urls: str|Iterable[str], top=True) -> trtjob.AddTrackerJob:
         '''
         Add one or more trackers.
 
         Arguments:
-        urls: one or more trackers in one string or an iterable of strings.
-            The function will deduplicate automatically.
-        top: bool: True: whether to place the added tracker to the top.
-        '''
-        urls = [urls] if isinstance(urls, str) else list(urls)
-        assert all(urls), 'Tracker url cannot be empty.'
-        assert all(isinstance(url, str) for url in urls), 'All supplied tracker urls must be str.'
-        self._meta.trackers = list(set(urls + self._meta.trackers)) if top else list(set(self._meta.trackers + urls))
+        urls: one tracker url in one string or multiple trackers from an iterable of strings.
+            The function will deduplicate the input urls.
+        top: whether to put the added tracker(s) to the top (default=True).
 
-    def setTracker(self, urls: str|Iterable[str]):
+        Returns:
+        A `TorrentAddTrackerJob` instance.
         '''
-        Set tracker list with the given one or more urls, dropping all existing ones.
+        urls = self.chkTracker(urls)
+        torrent_job = trtjob.AddTrackerJob(self, urls, top)
+        self._addJob(torrent_job)
+        return torrent_job
 
-        Argument:
-        urls: one or more trackers in one string or an iterable of strings.
-            The function will deduplicate automatically.
+    def setTracker(self, urls: str|Iterable[str]) -> trtjob.SetTrackerJob:
         '''
-        urls = [urls] if isinstance(urls, str) else list(urls)
-        assert all(urls), 'Tracker url cannot be empty.'
-        assert all(isinstance(url, str) for url in urls), 'All supplied tracker urls must be str.'
-        self._meta.trackers = list(set(urls))
+        Overwrite the tracker list with the given one or more urls, dropping all existing ones.
 
-    def rmTracker(self, urls: str|Iterable[str]):
+        Arguments:
+        urls: one tracker url in one string or multiple trackers from an iterable of strings.
+            The function will deduplicate the input urls.
+
+        Returns:
+        A `TorrentSetTrackerJob` instance.
+        '''
+        urls = self.chkTracker(urls)
+        torrent_job = trtjob.SetTrackerJob(self, urls)
+        self._addJob(torrent_job)
+        return torrent_job
+
+    def rmTracker(self, urls: str|Iterable[str]) -> trtjob.RemoveTrackerJob:
         '''
         Remove one or more trackers from the tracker list.
 
         Arguments:
         urls: one or more trackers in one string or an iterable of strings.
-        '''
-        urls = set((urls, )) if isinstance(urls, str) else set(urls)
-        assert all(urls), 'Tracker url cannot be empty.'
-        assert all(isinstance(url, str) for url in urls), 'All supplied tracker url must be str.'
-        self._meta.trackers = list(set(self._meta.trackers) - urls)
 
-    def setComment(self, comment: str):
+        Returns:
+        A `TorrentRemoveTrackerJob` instance.
+        '''
+        urls = self.chkTracker(urls)
+        torrent_job = trtjob.RemoveTrackerJob(self, urls)
+        self._addJob(torrent_job)
+        return torrent_job
+
+    def setComment(self, comment: str) -> trtjob.SetCommentJob:
         '''
         Set the comment message.
 
-        Argument:
-        comment: The comment message as str.
-        '''
-        assert isinstance(comment, str), 'Comment must be str.'
-        self._meta.comment = comment
+        Arguments:
+        comment: a string.
 
-    def setCreator(self, creator):
+        Returns:
+        A `TorrentSetCommentJob` instance.
+        '''
+        if not isinstance(comment, str): raise TypeError('Comment must be str.')
+        torrent_job = trtjob.SetCommentJob(self, comment)
+        self._addJob(torrent_job)
+        return torrent_job
+
+    def setCreator(self, creator) -> trtjob.SetCreatorJob:
         '''
         Set the creator of the torrent.
 
-        Argument:
-        creator: The str of the creator.
-        '''
-        assert isinstance(creator, str), 'Creator must be str.'
-        self._meta.creator = creator
+        Arguments:
+        creator: a string.
 
-    def setDate(self, date: int|float|str|time.struct_time|Iterable[int], format: Optional[str] = None):
+        Returns:
+        A `TorrentSetCreatorJob` instance.
         '''
-        Set the time.
+        if not isinstance(creator, str): raise TypeError('Creator must be str.')
+        torrent_job = trtjob.SetCreatorJob(self, creator)
+        self._addJob(torrent_job)
+        return torrent_job
 
-        Argument:
+    def setDate(
+        self, date: int|float|str|time.struct_time|Iterable[int], format: Optional[str] = None
+        ) -> trtjob.SetDateJob:
+        '''
+        Set the torrent creation time.
+
+        Arguments:
         date: accepts multiple formats:
-            if int or float, it must be the elapsed seconds since 1970-1-1;
-            if time.struct_time or interable of int, it must be the time tuple;
-            if str, it must be a valid date string that can be parsed by `time.strptime()` or `dateutil.parser.parse()`:
-                note that if `dateutil` is not installed, you must specify a `format` in `strptime()` format.
+            int|float -> the elapsed seconds since 1970-01-01, by calendar.timegm() or time.mktime();
+            time.struct_time -> the time tuple returned by `time.localtime()` or `time.gmtime()`;
+            Iterable[int] -> a time tuple acceptable by `time.struct_time()`;
+            str -> a valid date string that can be parsed by `time.strptime()` or `dateutil.parser.parse()`:
+        format: only required if `date` is str and dateutil is not installed.
+            if you specify a format, the function will always use `time.strptime()` to parse the date string.
+
+        Returns:
+        A `TorrentSetDateJob` instance.
         '''
         if isinstance(date, (int, float)):
-            self._meta.date = int(date)
+            date = int(date)
         elif isinstance(date, str):
             if format:
-                self._meta.date = int(time.mktime(time.strptime(date, format)))
+                date = int(time.mktime(time.strptime(date, format)))
             elif HAS_DATEUTIL:
-                self._meta.date = int(dateutil.parser.parse(date).timestamp())
+                date = int(dateutil.parser.parse(date).timestamp())
             else:
                 raise ValueError('You must install `python-dateutil` or specify a date format for str date.')
         elif isinstance(date, time.struct_time):
-            self._meta.date = int(time.mktime(date))
+            date = int(time.mktime(date))
         elif isinstance(date, Iterable) and (_date := list(date)) and all(isinstance(i, int) for i in _date):
-            self._meta.date = int(time.mktime(time.struct_time(_date)))
+            date = int(time.mktime(time.struct_time(_date)))
         else:
-            raise ValueError('The supplied date is not understood.')
+            raise ValueError('The specified date format is not understood.')
+        torrent_job = trtjob.SetDateJob(self, date)
+        self._addJob(torrent_job)
+        return torrent_job
 
-    def setEncoding(self, enc: str):
+    def setEncoding(self, encoding: str) -> trtjob.SetEncodingJob:
         '''
         Set the encoding for text.
 
-        Argument:
-        enc: The encoding, must be a valid one in python.
-        '''
-        assert isinstance(enc, str), 'Encoding must be str.'
-        codecs.lookup(enc)  # will raise LookupError if this encoding not exists
-        self._meta.encoding = enc  # respect the encoding str supplied by user
+        Arguments:
+        encoding: a string listed in Python built-in codecs.
 
-    def setName(self, name: str):
+        Returns:
+        A `TorrentSetEncodingJob` instance.
+        '''
+        if not isinstance(encoding, str): raise TypeError('Encoding must be str.')
+        codecs.lookup(encoding)  # will raise LookupError if this encoding not exists
+        torrent_job = trtjob.SetEncodingJob(self, encoding)
+        self._addJob(torrent_job)
+        return torrent_job
+
+    def setName(self, name: str) -> trtjob.SetNameJob:
         '''
         Set a new root name.
 
-        Argument:
+        Arguments:
         name: The new root name.
-        '''
-        assert isinstance(name, str), 'Torrent name must be str.'
-        assert name, 'Torrent name cannot be empty.'
-        assert not any(c in name for c in r'\/:*?"<>|'), 'Torrent name contains invalid character.'
-        self._info.name = name
 
-    def setPieceLength(self, size: int, strict: bool = True):
+        Returns:
+        A `TorrentSetNameJob` instance.
+        '''
+        if not isinstance(name, str): raise TypeError('Torrent name must be str.')
+        if not name: raise ValueError('Torrent name cannot be empty.')
+        if _INVALID_CHARS.search(name): raise ValueError('Torrent name contains invalid character.')
+        torrent_job = trtjob.SetNameJob(self, name)
+        self._addJob(torrent_job)
+        return torrent_job
+
+    def setPieceLength(self, size: int, strict: bool = True) -> trtjob.SetPieceLengthJob:
         '''
         Set torrent piece size.
         Note that changing piece size to a different value will clear the existing torrent piece hash.
-        Exception will be raised when the new piece size looks strange:
-        1. the piece size divided by 16KiB does not obtain a power of 2.
-        2. the piece size is beyond the range [256KiB, 32MiB].
-        Piece size smaller than 16KiB is never allowed.
 
-        Argument:
-        size: the piece size in bytes
-        strict: bool=True, whether to allow uncommon piece size and bypass exceptions
+        Arguments:
+        size: the piece size in number of bytes
+        strict: whether to allow uncommon piece size and bypass exceptions (default=True)
+            use `strict=False` to allow the following uncommon piece size:
+            1. the piece size divided by 16KiB does not obtain a power of 2.
+            2. the piece size is beyond the normal range [256KiB, 32MiB].
+            Note that piece size <16KiB is never allowed.
+
+        Returns:
+        A `TorrentSetPieceLengthJob` instance.
         '''
-        assert isinstance(size, int), 'Piece size must be int.'
-        assert isinstance(strict, bool), 'Check must be bool.'
-        assert size >= 16384, 'Piece size must be larger than 16KiB.'
-        if strict and size < 262144: raise PieceSizeTooSmall()
-        if strict and size > 33554432: raise PieceSizeTooLarge()
-        if strict and math.log2(size / 262144) % 1: raise PieceSizeUncommon()
-        if size != self._info.piece_length:  # changing piece size will clear existing hash
-            self._info.piece_length = size
-            self._info.pieces = b''
+        if not isinstance(size, int): raise TypeError('Piece size must be int.')
+        if not isinstance(strict, bool): raise TypeError('Check strictly or not must be bool.')
+        if size < 16384: raise ValueError('Piece size must be at least 16KiB.')
+        if strict and size < 262144: raise ValueError('Piece size should be at least 256KiB.')
+        if strict and size > 33554432: raise ValueError('Piece size should be at most 32MiB.')
+        if strict and math.log2(size / 262144) % 1: raise ValueError('Piece size must be a power of 2.')
+        torrent_job = trtjob.SetPieceLengthJob(self, size)
+        self._addJob(torrent_job)
+        return torrent_job
 
-    def setPrivate(self, private: bool|int):
+    def setPrivate(self, private: bool|int) -> trtjob.SetPrivateJob:
         '''
         Set torrent to private or not.
 
-        Argument:
+        Arguments:
         private: Any value that can be converted to `bool` and then set to private torrent if `True`.
+
+        Returns:
+        A `TorrentSetPrivateJob` instance.
         '''
-        self._info.private = int(bool(private))
+        torrent_job = trtjob.SetPrivateJob(self, int(bool(private)))
+        self._addJob(torrent_job)
+        return torrent_job
 
     def setSource(self, src: str):
         '''
@@ -615,11 +675,16 @@ class Torrent():
 
         Argument:
         src: The message text that can be converted to `str`.
-        '''
-        assert isinstance(src, str), 'Source must be str.'
-        self._info.source = str(src)
 
-    def set(self, **metadata: Any):
+        Returns:
+        A `TorrentSetSourceJob` instance.
+        '''
+        if not isinstance(src, str): raise TypeError('Source must be str.')
+        torrent_job = trtjob.SetSourceJob(self, src)
+        self._addJob(torrent_job)
+        return torrent_job
+
+    def set(self, **metadata: Any) -> trtjob.TorrentJob:
         '''
         Set metadata with flexible key aliases.
 
@@ -646,42 +711,46 @@ class Torrent():
             numfiles: nf|numfile|numfiles
             hash: th|torrenthash|sha1
             magnet: magnetlink|magneturl
+
+        Returns:
+        A `TorrentJob` instance.
         '''
         for key, value in metadata.items():
             match key:
                 case 't'|'tracker'|'trackers'|'tl'|'tlist'|'trackerlist'|'announce'|'announces'|'announcelist'|'alist':
-                    self.setTracker(value)
+                    return self.setTracker(value)
                 case 'comment'|'c'|'comm'|'comments':
-                    self.setComment(value)
+                    return self.setComment(value)
                 case 'creator'|'b'|'by'|'createdby'|'creator'|'tool'|'creatingtool'|'maker'|'madeby':
-                    self.setCreator(value)
+                    return self.setCreator(value)
                 case 'date'|'time'|'second'|'seconds'|'creationdate'|'creationtime'|'creatingdate'|'creatingtime':
-                    self.setDate(value)
+                    return self.setDate(value)
                 case 'encoding'|'e'|'enc'|'encoding'|'codec':
-                    self.setEncoding(value)
+                    return self.setEncoding(value)
                 case 'name'|'n'|'name'|'torrentname':
-                    self.setName(value)
+                    return self.setName(value)
                 case 'ps'|'pl'|'psz'|'psize'|'piecesize'|'piecelength':
-                    self.setPieceLength(value)
+                    return self.setPieceLength(value)
                 case 'private'|'p'|'priv'|'pt'|'pub'|'public':
-                    self.setPrivate(value)
+                    return self.setPrivate(value)
                 case 'source'|'s'|'src':
-                    self.setSource(value)
+                    return self.setSource(value)
                 case _:
                     raise KeyError(f'Unknown key: {key}')
+        raise ValueError('No key specified for set().')
 
     #* -----------------------------------------------------------------------------------------------------------------
     #* Input/output operations
     #* -----------------------------------------------------------------------------------------------------------------
 
-    def read(self, tpath: str|pathlib.Path):
+    def read(self, tpath: str|Path):
         '''Read everything from the template, i.e. copy the torrent file.
         Note that this function will clear all existing properties.
 
         Argument:
         tpath: the path to the torrent.'''
 
-        tpath = pathlib.Path(tpath)
+        tpath = Path(tpath)
         if not tpath.is_file():
             raise FileNotFoundError(f"The supplied '{tpath}' does not exist.")
         _torrent_dict: Any = bdecode(tpath.read_bytes())
@@ -714,14 +783,14 @@ class Torrent():
 
         self._srcsha1_byt = pieces
         if length and not files:
-            self._srcpath_lst = [pathlib.Path('.')]
+            self._srcpath_lst = [Path('.')]
             self._srcsize_lst = [length]
         elif not length and files:
             fsize_list = []
             fpath_list = []
             for file in files:
                 fsize_list.append(file[b'length'])
-                fpath_list.append(pathlib.Path().joinpath(*map(methodcaller('decode', encoding), file[b'path'])))
+                fpath_list.append(Path().joinpath(*map(methodcaller('decode', encoding), file[b'path'])))
             self._srcsize_lst = fsize_list
             self._srcpath_lst = fpath_list
         else:
@@ -729,7 +798,7 @@ class Torrent():
 
     def readMetadata(
         self,
-        tpath: str|pathlib.Path,
+        tpath: str|Path,
         include_key: Optional[str|Iterable[str]] = None,
         exclude_key: Optional[str|Iterable[str]] = None
         ):
@@ -744,7 +813,7 @@ class Torrent():
         `exclude_key`: str or set of str, these keys will not be copied (override `include_key`)
             keys: {trackers, comment, created_by, creation_date, encoding, source} (default='source')
         '''
-        if not (tpath := pathlib.Path(tpath)).is_file():
+        if not (tpath := Path(tpath)).is_file():
             raise FileNotFoundError(f"The supplied torrent file '{tpath}' does not exist.")
 
         key_set = {'tracker', 'comment', 'created_by', 'creation_date', 'encoding', 'source'}
@@ -777,152 +846,57 @@ class Torrent():
                 continue
             raise RuntimeError('Loop not correctly continued.')
 
-    def load(self, spath, keep_name=False, show_progress=False):
-        '''Load new file list and piece hash from the Source PATH (spath).
-
-        The following torrent keys will be overwritten on success:
-            files, name (may be preserved by `keep_name=True`), pieces
+    def load(self, spath: os.PathLike, keep_name: bool = False) -> trtjob.TorrentLoadSourceFilesJob:
+        '''
+        Load a new file list and piece hashes from the source path.
 
         Arguments:
-        spath: path-like objects, the source path to be loaded
-        keep_name: bool=False, whether to keep the old torrent name
-        show_progress: bool=False, whether to show a progress bar during loading, maybe removed in the future
+        spath: path-like objects, the source path to be loaded, either a single file or a directory.
+        keep_name: whether to keep the old torrent name (default=False).
+
+        Returns:
+        A `TorrentLoadSourceFilesJob` instance.
         '''
-        # argument handler
-        spath = pathlib.Path(spath)
-        if not spath.exists():
-            raise FileNotFoundError(f"The supplied '{spath}' does not exist.")
+        spath = Path(spath)
         keep_name = bool(keep_name)
-        show_progress = bool(show_progress)
+        if not spath.exists(): raise FileNotFoundError(f'The specified source path "{spath}" does not exist.')
+        torrent_job = trtjob.TorrentLoadSourceFilesJob(self, spath, keep_name)
+        self._addJob(torrent_job)
+        return torrent_job
 
-        fpaths = [spath] if spath.is_file() else sorted(filter(methodcaller('is_file'), spath.rglob('*')))
-        fpath_list = [fpath.relative_to(spath) for fpath in fpaths]
-        fsize_list = [fpath.stat().st_size for fpath in fpaths]
-        if sum(fsize_list):
-            if show_progress:  # TODO: stdout is dirty in core class method and should be moved out in the future
-                sha1 = b''
-                piece_bytes = bytes()
-                pbar1 = tqdm.tqdm(
-                    total=sum(fsize_list), desc='Size', unit='B', unit_scale=True, ascii=True, dynamic_ncols=True
-                    )
-                pbar2 = tqdm.tqdm(total=len(fsize_list), desc='File', unit='', ascii=True, dynamic_ncols=True)
-                for fpath in fpaths:
-                    with fpath.open('rb', buffering=0) as fobj:
-                        while (read_bytes := fobj.read(self.piece_length - len(piece_bytes))):
-                            piece_bytes += read_bytes
-                            if len(piece_bytes) == self.piece_length:
-                                sha1 += _hash(piece_bytes)
-                                piece_bytes = bytes()
-                            pbar1.update(len(read_bytes))
-                        pbar2.update(1)
-                sha1 += _hash(piece_bytes) if piece_bytes else b''
-                pbar1.close()
-                pbar2.close()
-            else:  # not show progress bar
-                sha1 = b''
-                piece_bytes = bytes()
-                for fpath in fpaths:
-                    with fpath.open('rb', buffering=0) as fobj:
-                        while (read_bytes := fobj.read(self.piece_length - len(piece_bytes))):
-                            piece_bytes += read_bytes
-                            if len(piece_bytes) == self.piece_length:
-                                sha1 += _hash(piece_bytes)
-                                piece_bytes = bytes()
-                sha1 += _hash(piece_bytes) if piece_bytes else b''
-        else:
-            raise EmptySourceSize()
-
-        # Everything looks good, let's update internal parameters
-        self.name = self.name if keep_name else spath.name
-        self._srcpath_lst = fpath_list
-        self._srcsize_lst = fsize_list
-        self._srcsha1_byt = sha1
-
-    def write(self, tpath, overwrite=False):
-        '''Save the torrent to file.
+    def write(self, tpath: os.PathLike, overwrite: bool = False):
+        '''
+        Save the torrent info to a torrent file.
 
         Arguments:
         tpath: path-like object, the path to save the torrent.
-            If supplied an existing dir, it will be saved under that dir.
-        overwrite: bool=False, whether to overwrite if the target file already exists.
+            if it's a directory, the torrent will be saved under it.
+        overwrite: whether to overwrite the existing file (default=False).
         '''
-        tpath = pathlib.Path(tpath)
+        tpath = Path(tpath)
         overwrite = bool(overwrite)
-        if (error := self.check()):
-            raise TorrentNotReady(f"The torrent is not ready to be saved: {error}.")
-
-        fpath = tpath.joinpath(f"{self.name}.torrent") if tpath.is_dir() else tpath
-        if fpath.is_file() and not overwrite:
-            raise FileExistsError(f"The target '{fpath}' already exists.")
+        tpath = tpath / f'{self.name}.torrent' if tpath.is_dir() else tpath
+        if tpath.is_file() and not overwrite:
+            raise FileExistsError(f'The target "{tpath}" already exists.')
         else:
-            fpath.parent.mkdir(parents=True, exist_ok=True)
-            fpath.write_bytes(bencode(self.torrent_dict, self.encoding))
+            tpath.parent.mkdir(parents=True, exist_ok=True)
+            tpath.write_bytes(bencode(self.torrent_dict, self.encoding))
 
-    def verify(self, spath):
+    def verify(self, spath) -> trtjob.TorrentVerifyJob:
         '''
-        Verify external source files with the internal torrent.
+        Verify source files against the torrent info.
 
-        Argument:
-        path: the path to source files.
+        Arguments:
+        spath: the path to source files.
 
         Return:
-        The piece index from 0 that failed to hash
+        An `TorrentVerifyJob` instance.
         '''
-        spath = pathlib.Path(spath)
-        if not spath.exists():
-            raise FileNotFoundError(f"The source path '{spath}' does not exist.")
-        if (error := self.check()):
-            raise TorrentNotReady(f"The torrent is not ready for verification.")
-
-        if self.num_files == 1:
-            if spath.is_file() and spath.name == self.name:
-                spath = spath
-            elif spath.is_dir():
-                raise IsADirectoryError(f"Expect a single file, not a directory '{spath}'.")
-            else:
-                raise RuntimeError('Unexpected Error.')
-        elif self.num_files > 1:
-            if spath.is_file():
-                raise NotADirectoryError(f"Expect a directory, not a single file '{spath}'.")
-            elif spath.is_dir() and spath.name == self.name:
-                spath = spath
-            else:
-                raise RuntimeError('Unexpected Error.')
-        else:
-            raise RuntimeError('Unexpected Error.')
-
-        piece_bytes = bytes()
-        piece_idx = 0
-        piece_error_list = []
-        for finfo in self.file_list:
-            fsize = finfo['size']
-            fpath = finfo['path']
-            dest_fpath = spath.joinpath(*fpath)
-            if dest_fpath.is_file():
-                read_quota = min(fsize, dest_fpath.stat().st_size)  # we only need to load the smaller file size
-                with dest_fpath.open('rb', buffering=0) as dest_fobj:
-                    while (read_bytes := dest_fobj.read(min(self.piece_length - len(piece_bytes), read_quota))):
-                        piece_bytes += read_bytes
-                        if len(piece_bytes) == self.piece_length:  # whole piece loaded
-                            if _hash(piece_bytes) != self.pieces[20 * piece_idx:20*piece_idx + 20]:  # sha1 mismatch
-                                piece_error_list.append(piece_idx)
-                            piece_idx += 1  # whole piece loaded, piece index increase
-                            piece_bytes = bytes()  # whole piece loaded, clear existing bytes
-                        if (read_quota := read_quota - len(read_bytes)) == 0:  # smaller file read
-                            # we need to fill remaining bytes
-                            piece_bytes += b'\0' * diff if (diff := fsize - dest_fpath.stat().st_size) > 0 else b''
-                            break
-            else:  # the file does not exist
-                size = len(piece_bytes) + fsize
-                n_empty_piece, piece_blank_shift = divmod(size, self.piece_length)
-                piece_bytes = b'\0' * piece_blank_shift  # it should be OK to just replace existing piece_bytes by \0
-                for _ in range(n_empty_piece):
-                    piece_error_list.append(piece_idx)
-                    piece_idx += 1
-        if piece_bytes and _hash(piece_bytes) != self.pieces[20 * piece_idx:20*piece_idx + 20]:  # remainder
-            piece_error_list.append(piece_idx)
-
-        return piece_error_list
+        spath = Path(spath)
+        if not spath.exists(): raise FileNotFoundError(f'The source path "{spath}" does not exist.')
+        torrent_job = trtjob.TorrentVerifyJob(self, spath)
+        self._addJob(torrent_job)
+        return torrent_job
 
     '''-----------------------------------------------------------------------------------------------------------------
     Other helper properties and members
@@ -955,7 +929,7 @@ class Torrent():
             ret.append(f"Torrent bencoding failed ({e}).")
         return ret
 
-    def index(self, path, /, num=1):
+    def index(self, path: str, case_sensitive: bool = True, num: int = 1) -> list[tuple[str, int, int]]:
         '''Given filename, return its piece index.
 
         Arguments:
@@ -967,37 +941,34 @@ class Torrent():
         A list of 3-element tuple of (path, start-index, end-index)
             Indexed in python style, from 0 to len-1, and [m, n+1] for items from m to n
         '''
-        fparts = pathlib.Path(path).parts
-        num = int(num) if int(num) > 0 else 0
-        if self.check():
-            raise TorrentNotReady('Torrent is not ready for indexing.')
+        if not isinstance(path, str): raise TypeError('Path must be str.')
+        if not isinstance(case_sensitive, bool): raise TypeError('Case sensitive must be bool.')
+        if not isinstance(num, int): raise TypeError('Number of files must be int.')
 
-        ret = []
+        target_parts = PurePath(path).parts
+        n = len(target_parts)
+
+        ret: list[tuple[str, int, int]] = []
         loaded_size = 0
         for finfo in self.file_list:
-            fsize = finfo['size']
-            fpath = finfo['path']
-            n_shorter = min(len(fpath), len(fparts))
-            if fpath[:-n_shorter - 1:-1] == fparts[:-n_shorter - 1:-1]:
-                ret.append([
-                    os.path.join(self.name, *fpath),
+            fsize = finfo.size
+            parts = tuple(self.name, *finfo.path)
+            if len(parts) >= n and parts[:-n - 1:-1] == target_parts[:-n - 1:-1]:
+                ret.append((
+                    PurePath(*parts).as_posix(),
                     math.floor(loaded_size / self.piece_length),
                     math.ceil((loaded_size+fsize) / self.piece_length)
-                    ])
-                if (num := num - 1) == 0:
+                    ))
+                if (num := num - 1) <= 0:
                     break
             loaded_size += fsize
-
         return ret
 
     def __getitem__(self, key: int|slice) -> list[str]:
-        '''Give 0-indexed piece index or slice, return files associated with the piece or piece range.'''
+        '''Give 0-indexed piece index or slice, return files associated with it.'''
 
         if not isinstance(key, (int, slice)):
             raise TypeError(f"Expect int, not {key.__class__}.")
-
-        if self.check():
-            raise TorrentNotReady('Torrent is not ready to for item getter.')
 
         if isinstance(key, int):
             lsize = self.piece_length * (key if key >= 0 else self.num_pieces + key)
@@ -1013,12 +984,10 @@ class Torrent():
 
         ret = []
         total_size = 0
-        for file_info in self.file_list:
-            path = file_info['path']
-            size = file_info['size']
-            total_size += size
+        for file in self.file_list:
+            total_size += file.size
             if total_size > lsize:
-                ret.append(os.pathsep.join(path))
+                ret.append(os.pathsep.join(file.path))
             if total_size >= hsize:
                 return ret
 
