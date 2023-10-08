@@ -7,9 +7,8 @@ The original author specified no license, so it is assumed to be public domain.
 
 __all__ = ['bencode', 'bdecode', 'BdecodeError']
 
-import string
 import re
-
+import string
 from functools import partial
 
 

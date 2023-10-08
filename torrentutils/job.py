@@ -5,9 +5,9 @@ import copy
 from typing import Optional, Any
 from pathlib import Path, PurePath
 
-from . import torrent as trt
-from .hasher import toSHA1
-from .torrent_error import TorrentIsEmptyError
+import torrentutils.torrent as trt
+from torrentutils.hasher import toSHA1
+from torrentutils.error import TorrentIsEmptyError
 
 try:
     from natsort import os_sorted

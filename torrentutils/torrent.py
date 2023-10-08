@@ -13,9 +13,9 @@ from dataclasses import dataclass
 from operator import methodcaller
 from typing import Iterable, Optional, Any
 
-from .hasher import toSHA1
-from .bencoder import bencode, bdecode
-from . import torrent_job as trtjob
+from torrentutils.hasher import toSHA1
+from torrentutils.bencoder import bencode, bdecode
+import torrentutils.job as trtjob
 
 try:
     import dateutil.parser
