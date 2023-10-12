@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+
+__all__ = ['Torrent', 'fromTorrent', 'fromFiles']
+
 import re
 import os
 import math
@@ -9,12 +12,13 @@ import warnings
 import urllib.parse
 from pathlib import Path, PurePath
 from threading import Thread, Lock, Event
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from operator import methodcaller
 from typing import Iterable, Optional, Any
 
 from torrentutils.hasher import toSHA1
-from torrentutils.bencoder import bencode, bdecode
+from torrentutils.bencode import bencode
+from torrentutils.bencode import bdecode4torrent as bdecode
 import torrentutils.job as trtjob
 
 try:
@@ -23,8 +27,10 @@ try:
 except ImportError:
     HAS_DATEUTIL = False
 
-_ASCII = re.compile(r'[a-z0-9]+', re.IGNORECASE)
-_INVALID_CHARS = re.compile(r'(\s|[\/:*?"<>|])')
+_ENCODING = 'utf-8'
+_PIECE_SIZE = 4096 << 10
+_ASCII_CHAR_REGEX = re.compile(r'[a-z0-9]+', re.IGNORECASE)
+_INVALID_CHAR_REGEX = re.compile(r'(\s|[\/:*?"<>|])')
 
 
 
@@ -52,11 +58,11 @@ class _TorrentMeta():
 
     '''The basic yet most common metadata of a torrent'''
 
-    trackers: list[str] = []  # the list of tracker urls
-    comment: str = ''  # the comment message'
+    trackers: list[str] = field(default_factory=list)  # the list of tracker urls
+    comment: str = ''  # the comment message
     creator: str = ''  # the creator of the torrent
     date: int = 0  # the creation time
-    encoding: str = 'UTF-8'  # the encoding for text
+    encoding: str = _ENCODING  # the encoding for text
     hash: str = ''  # the hash of the torrent
 
 
@@ -67,9 +73,10 @@ class _TorrentInfo():
 
     '''The required and most common metadata in torrent's info dict.'''
 
-    files: list[tuple[tuple[str, ...], int]] = []  # the list of tuple of path parts and file size
+    # the list of tuple of path parts and file size
+    files: list[tuple[tuple[str, ...], int]] = field(default_factory=list)
     name: str = ''  # the root name of the torrent
-    piece_length: int = 4096 << 10  # the piece size in bytes
+    piece_length: int = _PIECE_SIZE  # the piece size in bytes
     pieces: bytes = b''  # the long raw bytes of pieces' sha1
     private: int = 0  # 1 if the torrent is private, otherwise 0
     source: str = ''  # the special message particularly used by private trackers
@@ -385,7 +392,7 @@ class Torrent():
             hash: th|torrenthash|sha1
             magnet: magnetlink|magneturl
         '''
-        key = _ASCII.sub('', key).lower()
+        key = _ASCII_CHAR_REGEX.sub('', key).lower()
 
         match key:
             case 't'|'tracker'|'trackers'|'tl'|'tlist'|'trackerlist'|'announce'|'announces'|'announcelist'|'alist':
@@ -624,7 +631,7 @@ class Torrent():
         '''
         if not isinstance(name, str): raise TypeError('Torrent name must be str.')
         if not name: raise ValueError('Torrent name cannot be empty.')
-        if _INVALID_CHARS.search(name): raise ValueError('Torrent name contains invalid character.')
+        if _INVALID_CHAR_REGEX.search(name): raise ValueError('Torrent name contains invalid character.')
         torrent_job = trtjob.SetNameJob(self, name)
         self._addJob(torrent_job)
         return torrent_job
