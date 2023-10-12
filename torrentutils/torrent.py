@@ -107,43 +107,60 @@ class Torrent():
         self._misc: dict[str, Any] = {}  # this is used to save other non-standard metadata
         self.set(**torrent_set_kwargs)
 
-        self._write_jobs: list[trtjob.TorrentJob] = []
-        self._write_lock: Lock = Lock()
-        self._job_can_start: Event = Event()
-        self._job_is_running: Event = Event()
+        self._write_lock: Lock = Lock()  #! only one call can modify the torrent at a time
 
-        self._job_thread = Thread(target=self._job_worker, daemon=True)
+        self._job_queue: list[trtjob.TorrentJob] = []
+        self._job_index: int = 0
+        self._job_added: Event = Event()
+        self._job_doing: Event = Event()
+
+        self._job_thread = Thread(target=self._executeJobs)
         self._job_thread.start()
 
-    def _job_worker(self):
-        next_job_idx: int = 0
+    #* -----------------------------------------------------------------------------------------------------------------
+    #* background writing jobs related methods
+    #* -----------------------------------------------------------------------------------------------------------------
+
+    def _executeJobs(self):
         while True:
-            self._job_can_start.wait()
-            self._job_can_start.clear()
+            self._job_added.wait()
+            self._job_added.clear()
             with self._write_lock:
-                while len(self._write_jobs) >= next_job_idx:
-                    self._job_is_running.set()
-                    next_job = self._write_jobs[next_job_idx]
-                    next_job.start()
-                    next_job_idx += 1
-                    if len(self._write_jobs) < next_job_idx:
-                        self._job_is_running.clear()
+                while len(self._job_queue) >= self._job_index:
+                    self._job_doing.set()
+                    self._job_queue[self._job_index].start()
+                    self._job_index += 1
+                self._job_doing.clear()
+
+    def _addJob(self, job: trtjob.TorrentJob):
+        self._job_queue.append(job)
+        self._job_added.set()
+
+    def wait(self):
+        '''Wait for all background writing jobs to finish.'''
+        self._job_doing.wait()
 
     @property
-    def current_job(self) -> Optional[trtjob.TorrentJob]:
-        raise NotImplementedError('This function is not implemented yet.')
+    def is_locked(self) -> bool:
+        '''Return whether the torrent is locked by any writing call or job.'''
+        return self._write_lock.locked()
 
     @property
-    def last_job(self) -> Optional[trtjob.TorrentJob]:
-        raise NotImplementedError('This function is not implemented yet.')
+    def is_running(self) -> bool:
+        '''Return whether there is any background writing job running.'''
+        return self._job_doing.is_set()
+
+    @property
+    def running_job(self) -> Optional[trtjob.TorrentJob]:
+        '''Return the current running job.'''
+        if self.is_running and self._job_index < len(self._job_queue):
+            return self._job_queue[self._job_index]
+        return None
 
     @property
     def jobs(self) -> list[trtjob.TorrentJob]:
-        return self._write_jobs[:]
-
-    def _addJob(self, job: trtjob.TorrentJob):
-        self._write_jobs.append(job)
-        self._job_can_start.set()
+        '''Return a copy of the job queue.'''
+        return self._job_queue[:]
 
     #* -----------------------------------------------------------------------------------------------------------------
     #* The following properties mimic the keys existing in an actual torrent.
