@@ -5,6 +5,7 @@ __all__ = ['Torrent', 'fromTorrent', 'fromFiles']
 
 import re
 import os
+import copy
 import math
 import time
 import codecs
@@ -78,7 +79,7 @@ class _TorrentInfo():
     name: str = ''  # the root name of the torrent
     piece_length: int = _PIECE_SIZE  # the piece size in bytes
     pieces: bytes = b''  # the long raw bytes of pieces' sha1
-    private: int = 0  # 1 if the torrent is private, otherwise 0
+    private: bool = False  # whether the torrent is private
     source: str = ''  # the special message particularly used by private trackers
 
 
@@ -118,7 +119,7 @@ class Torrent():
         self._job_thread.start()
 
     #* -----------------------------------------------------------------------------------------------------------------
-    #* background writing jobs related methods
+    #* methods to operate background writing jobs
     #* -----------------------------------------------------------------------------------------------------------------
 
     def _executeJobs(self):
@@ -163,14 +164,13 @@ class Torrent():
         return self._job_queue[:]
 
     #* -----------------------------------------------------------------------------------------------------------------
-    #* The following properties mimic the keys existing in an actual torrent.
-    #* Note that if the boolen evaluation of the returned value is `False`, the key does not exist.
+    #* properties imitating keys existing in an actual torrent
     #* -----------------------------------------------------------------------------------------------------------------
 
     @property
-    def announce(self) -> str:
-        '''Return the first tracker url if exists, otherwise an empty string.'''
-        return self._meta.trackers[0] if self._meta.trackers else ''
+    def announce(self) -> Optional[str]:
+        '''Return the first tracker url if exists.'''
+        return self._meta.trackers[0][:] if self._meta.trackers else None
 
     @announce.setter
     def announce(self, url: str):
@@ -178,9 +178,9 @@ class Torrent():
         self.setTracker([url] + self._meta.trackers[1:])
 
     @property
-    def announce_list(self) -> list[str]:
-        '''Return all trackers if total trackers >=2, otherwise an empty list.'''
-        return self._meta.trackers[:] if self.num_tracker >= 2 else []
+    def announce_list(self) -> Optional[list[str]]:
+        '''Return all trackers if total trackers >=2.'''
+        return copy.deepcopy(self._meta.trackers) if self.num_tracker >= 2 else None
 
     @announce_list.setter
     def announce_list(self, urls: Iterable[str]):
@@ -190,9 +190,9 @@ class Torrent():
         self.setTracker(urls)
 
     @property
-    def comment(self) -> str:
+    def comment(self) -> Optional[str]:
         '''Return the comment message displayable in various clients.'''
-        return self._meta.comment[:]
+        return _ if (_ := self._meta.comment[:]) else None
 
     @comment.setter
     def comment(self, chars: str):
@@ -200,9 +200,9 @@ class Torrent():
         self.setComment(chars)
 
     @property
-    def created_by(self) -> str:
+    def created_by(self) -> Optional[str]:
         '''Return the creator of the torrent.'''
-        return self._meta.creator[:]
+        return _ if (_ := self._meta.creator[:]) else None
 
     @created_by.setter
     def created_by(self, creator: str):
@@ -210,9 +210,9 @@ class Torrent():
         self.setCreator(creator)
 
     @property
-    def creation_date(self) -> int:
+    def creation_date(self) -> Optional[int]:
         '''Return torrent creation time as the number of second since 1970-01-01.'''
-        return self._meta.date
+        return _ if (_ := self._meta.date) > 0 else None
 
     @creation_date.setter
     def creation_date(self, date: int):
@@ -220,9 +220,9 @@ class Torrent():
         self.setDate(date)
 
     @property
-    def encoding(self) -> str:
+    def encoding(self) -> Optional[str]:
         '''Return the encoding for text.'''
-        return self._meta.encoding[:]
+        return _ if (_ := self._meta.encoding[:]) else None
 
     @encoding.setter
     def encoding(self, enc: str):
@@ -231,34 +231,37 @@ class Torrent():
 
     @property
     def hash(self) -> str:
-        '''Return the torrent hash at the moment. Read-only.'''
-        return toSHA1(bencode(self.info_dict, self.encoding)).hex()
+        '''
+        Return the torrent hash at the moment. Read-only.
+        Note that if no encoding was set, the hash is calcualted using `utf-8` benconded data.
+        '''
+        return toSHA1(bencode(self.info_dict, self.encoding or _ENCODING)).hex()
 
     @property
-    def files(self) -> list[dict[str, int|tuple[str, ...]]]:
+    def files(self) -> Optional[list[dict[str, int|tuple[str, ...]]]]:
         '''
         Return a list of dict of file size and path parts if files number >=2. Read-only.
         Corresponding to torrent['info']['files'] in an actual torrent.
         '''
         return list({
             'path': fparts, 'length': fsize
-            } for (fparts, fsize) in self._info.files) if len(self._info.files) > 1 else []
+            } for (fparts, fsize) in self._info.files) if len(self._info.files) > 1 else None
 
     @property
-    def length(self) -> int:
+    def length(self) -> Optional[int]:
         '''
         Return the size of single file torrent. Read-only.
         Corresponding to torrent['info']['length'] in an actual torrent.
         '''
-        return self._info.files[0][1] if len(self._info.files) == 1 else 0
+        return self._info.files[0][1] if len(self._info.files) == 1 else None
 
     @property
-    def name(self) -> str:
+    def name(self) -> Optional[str]:
         '''
         Return the root name of the torrent.
         Corresponding to torrent['info']['name'] in an actual torrent.
         '''
-        return self._info.name[:]
+        return _ if (_ := self._info.name[:]) else None
 
     @name.setter
     def name(self, name: str):
@@ -266,12 +269,12 @@ class Torrent():
         self.setName(name)
 
     @property
-    def piece_length(self) -> int:
+    def piece_length(self) -> Optional[int]:
         '''
         Return the piece size in bytes.
         Corresponding to torrent['info']['piece length'] in an actual torrent.
         '''
-        return self._info.piece_length
+        return _ if (_ := self._info.piece_length) > 0 else None
 
     @piece_length.setter
     def piece_length(self, size: int):
@@ -290,12 +293,12 @@ class Torrent():
         return self._info.pieces[:]
 
     @property
-    def private(self) -> int:
+    def private(self) -> Optional[int]:
         '''
         Return 1 if the torrent is private, otherwise 0.
         Corresponding to torrent['info']['private'] in an actual torrent.
         '''
-        return 1 if self._info.private else 0
+        return 1 if self._info.private else None
 
     @private.setter
     def private(self, private: int|bool):
@@ -303,12 +306,12 @@ class Torrent():
         self.setPrivate(private)
 
     @property
-    def source(self) -> str:
+    def source(self) -> Optional[str]:
         '''
         Return a special message typically used in private torrent to alter hash.
         Corresponding to torrent['info']['source'] in an actual torrent.
         '''
-        return self._info.source[:]
+        return _ if (_ := self._info.source[:]) else None
 
     @source.setter
     def source(self, src: str):
@@ -689,7 +692,7 @@ class Torrent():
         Returns:
         A `TorrentSetPrivateJob` instance.
         '''
-        torrent_job = trtjob.SetPrivateJob(self, int(bool(private)))
+        torrent_job = trtjob.SetPrivateJob(self, bool(private))
         self._addJob(torrent_job)
         return torrent_job
 
