@@ -1,25 +1,21 @@
 __all__ = ['Trackers']
 
 from itertools import chain
-from collections.abc import Sequence, Sequence
+from collections.abc import Sequence
 from typing import Optional, overload, cast
-from torrentutils.type import strs
 
-from torrentutils.helper import handleIntIdx, handleURL
-from torrentutils.config import CHECK_URL_FORMAT as _CHECK
-from torrentutils.config import RAISE_MALFORMED_URL as _RAISE
-from torrentutils.config import URL_UNIQUE_IN_TIERS as _DEDUP
-from torrentutils.config import KEEP_EMPTY_TIER as _KPEPY
-from torrentutils.config import TRACKER_URL_REGEX
+from torrentutils.type import strs
+from torrentutils.helper import handleIntIdx, handleURL, compareURL
+from torrentutils.config import CHECK_URL_FORMAT, RAISE_MALFORMED_URL, URL_UNIQUE_IN_TIERS, KEEP_EMPTY_TIER, TRACKER_URL_REGEX
 
 
 class Trackers():
 
     def __init__(self, *args, **kwargs):
-        '''Initialise a tracker list. Optionally set the tracker urls, the same as calling set().'''
+        '''Initialise a tracker list. Optionally set the initial trackers by calling the way as set().'''
 
-        self._llu: list[list[str]] = []  # List of List of Urls
-        self._alu: list[str]|None = None  # All List of Urls, cached from self._llu
+        self._tiers: list[list[str]] = []  # List of List of Urls
+        self._urls: list[str]|None = None  # All List of Urls, cached from self._llu
 
         if args or kwargs: self.set(*args, **kwargs)
 
@@ -30,13 +26,13 @@ class Trackers():
     @property
     def tiers(self) -> list[list[str]]:
         '''Get a shallow copy of all tracker urls in all tiers.'''
-        return [lu[:] for lu in self._llu]
+        return [lu[:] for lu in self._tiers]
 
     @property
     def urls(self) -> list[str]:
-        '''Get a deduplicated full list of tracker urls.'''
-        if self._alu is None: self._alu = list(set(chain.from_iterable(self._llu)))
-        return self._alu[:]
+        '''Get a simply deduplicated full list of all tracker urls.'''
+        if self._urls is None: self._urls = list(set(chain.from_iterable(self._tiers)))
+        return self._urls[:]
 
     #* -----------------------------------------------------------------------------------------------------------------
     #* general methods
@@ -44,16 +40,18 @@ class Trackers():
 
     def has(self, url: str) -> bool:
         '''Check if the specified tracker url exists.'''
-        return url in self.urls
+        for u in self.urls:
+            if compareURL(u, url): return True
+        return False
 
     def index(self, url: str) -> Optional[tuple[int, int]]:
         '''
         Get the (first) index [tier, pos] of the specified tracker url.
         Note that according to BEP 12, the tracker url's position in the tier does not matter as it should be shuffled.
         '''
-        for i, lu in enumerate(self._llu):
+        for i, lu in enumerate(self._tiers):
             for j, u in enumerate(lu):
-                if u == url: return i, j
+                if compareURL(u, url): return (i, j)
         return None
 
     def set(
@@ -61,10 +59,10 @@ class Trackers():
         urls: str|strs|Sequence[strs],
         index: Optional[int|Sequence[int]] = None,
         *,
-        check_format: bool = _CHECK,
-        raise_malformed: bool = _RAISE,
-        unique_in_tiers: bool = _DEDUP,
-        keep_empty_tier: bool = _KPEPY,
+        check_format: bool = CHECK_URL_FORMAT,
+        raise_malformed: bool = RAISE_MALFORMED_URL,
+        unique_in_tiers: bool = URL_UNIQUE_IN_TIERS,
+        keep_empty_tier: bool = KEEP_EMPTY_TIER,
         ):
         '''
         Set the tracker urls of one or more tiers (!drop! previous ones).
@@ -106,7 +104,7 @@ class Trackers():
             if isinstance(index, int):
                 index = handleIntIdx(index, len(self))
                 if unique_in_tiers: self.remove(urls, keep_empty_tier=True)
-                self._llu.insert(index, [urls])
+                self._tiers.insert(index, [urls])
                 if not keep_empty_tier: self._dropEmptyTier()
             else:
                 raise ValueError('Invalid index.')
@@ -117,19 +115,19 @@ class Trackers():
             if isinstance(index, int):
                 index = handleIntIdx(index, len(self))
                 if unique_in_tiers: self.remove(urls, keep_empty_tier=True)
-                self._llu.insert(index, urls)
+                self._tiers.insert(index, urls)
                 if not keep_empty_tier: self._dropEmptyTier()
             else:
                 raise ValueError('Invalid index.')
 
-        elif isinstance(urls, Sequence) and all(isinstance(item, Sequence) for item in urls):
+        elif isinstance(urls, Sequence) and all(isinstance(item, Sequence) for item in urls
+                                                ) and all(isinstance(item, str) for item in chain.from_iterable(urls)):
             urls = [list(lu) for lu in urls]
             index = 0 if index is None else index
             if isinstance(index, int):
                 index = handleIntIdx(index, len(self))
                 index = list(range(index, index + len(urls)))
-            elif isinstance(index, Sequence):
-                if not all(isinstance(i, int) for i in index): raise ValueError('Invalid index.')
+            elif isinstance(index, Sequence) and all(isinstance(i, int) for i in index):
                 if len(index) != len(urls): raise ValueError('Invalid index length.')
                 index = handleIntIdx(index, len(self))
                 index, urls = list(zip(*sorted(zip(index, urls), key=lambda x: x[0])))  # must be stable sort
@@ -141,24 +139,24 @@ class Trackers():
             for i, lu in zip(index, urls):
                 if unique_in_tiers: self.remove(lu, keep_empty_tier=True)
                 i += n_tier_added
-                self._llu.insert(i, lu)
+                self._tiers.insert(i, lu)
                 if i < len(self): n_tier_added += 1
             if not keep_empty_tier: self._dropEmptyTier()
 
         else:
             raise ValueError('Malformed urls input.')
 
-        self._alu = None
+        self._urls = None
 
     def extend(
         self,
         urls: str|strs|Sequence[strs],
         *,
         index: Optional[int|Sequence[int]] = None,
-        check_format: bool = _CHECK,
-        raise_malformed: bool = _RAISE,
-        unique_in_tiers: bool = _DEDUP,
-        keep_empty_tier: bool = _KPEPY,
+        check_format: bool = CHECK_URL_FORMAT,
+        raise_malformed: bool = RAISE_MALFORMED_URL,
+        unique_in_tiers: bool = URL_UNIQUE_IN_TIERS,
+        keep_empty_tier: bool = KEEP_EMPTY_TIER,
         ):
         '''
         Extend tracker tier(s) with new tracker url(s).
@@ -200,7 +198,7 @@ class Trackers():
             if isinstance(index, int):
                 index = handleIntIdx(index, len(self))
                 if unique_in_tiers: self.remove(urls, keep_empty_tier=True)
-                self._llu.insert(index, ([urls] + self._llu.pop(index)) if index < len(self) else [urls])
+                self._tiers.insert(index, ([urls] + self._tiers.pop(index)) if index < len(self) else [urls])
                 if not keep_empty_tier: self._dropEmptyTier()
             else:
                 raise ValueError('Invalid index.')
@@ -211,19 +209,19 @@ class Trackers():
             if isinstance(index, int):
                 index = handleIntIdx(index, len(self))
                 if unique_in_tiers: self.remove(urls, keep_empty_tier=True)
-                self._llu.insert(index, (urls + self._llu.pop(index)) if index < len(self) else urls)
+                self._tiers.insert(index, (urls + self._tiers.pop(index)) if index < len(self) else urls)
                 if not keep_empty_tier: self._dropEmptyTier()
             else:
                 raise ValueError('Invalid index.')
 
-        elif isinstance(urls, Sequence) and all(isinstance(item, Sequence) for item in urls):
+        elif isinstance(urls, Sequence) and all(isinstance(item, Sequence) for item in urls
+                                                ) and all(isinstance(item, str) for item in chain.from_iterable(urls)):
             urls = [list(lu) for lu in urls]
             index = 0 if index is None else index
             if isinstance(index, int):
                 index = handleIntIdx(index, len(self))
                 index = list(range(index, index + len(urls)))
-            elif isinstance(index, Sequence):
-                if not all(isinstance(i, int) for i in index): raise ValueError('Invalid index.')
+            elif isinstance(index, Sequence) and all(isinstance(i, int) for i in index):
                 if len(index) != len(urls): raise ValueError('Invalid index length.')
                 index = handleIntIdx(index, len(self))
                 index, urls = list(zip(*sorted(zip(index, urls), key=lambda x: x[0])))  # must be stable sort
@@ -236,26 +234,26 @@ class Trackers():
                 if unique_in_tiers: self.remove(lu, keep_empty_tier=True)
                 i += n_tier_added
                 if i < len(self):
-                    self._llu.insert(i, lu + self._llu.pop(i))
+                    self._tiers.insert(i, lu + self._tiers.pop(i))
                 else:
-                    self._llu.append(lu)
+                    self._tiers.append(lu)
                     n_tier_added += 1
             if not keep_empty_tier: self._dropEmptyTier()
 
         else:
             raise ValueError('Malformed urls input.')
 
-        self._alu = None
+        self._urls = None
 
     def insert(
         self,
         urls: str|strs|Sequence[strs],
         *,
         index: Optional[int|Sequence[int]] = None,
-        check_format: bool = _CHECK,
-        raise_malformed: bool = _RAISE,
-        unique_in_tiers: bool = _DEDUP,
-        keep_empty_tier: bool = _KPEPY,
+        check_format: bool = CHECK_URL_FORMAT,
+        raise_malformed: bool = RAISE_MALFORMED_URL,
+        unique_in_tiers: bool = URL_UNIQUE_IN_TIERS,
+        keep_empty_tier: bool = KEEP_EMPTY_TIER,
         ):
         '''
         Insert new tier(s) with tracker url(s) at the specified position(s).
@@ -297,7 +295,7 @@ class Trackers():
             if isinstance(index, int):
                 index = handleIntIdx(index, len(self))
                 if unique_in_tiers: self.remove(urls, keep_empty_tier=True)
-                self._llu.insert(index, [urls])
+                self._tiers.insert(index, [urls])
                 if not keep_empty_tier: self._dropEmptyTier()
             else:
                 raise ValueError('Invalid index.')
@@ -308,19 +306,19 @@ class Trackers():
             if isinstance(index, int):
                 index = handleIntIdx(index, len(self))
                 if unique_in_tiers: self.remove(urls, keep_empty_tier=True)
-                self._llu.insert(index, urls)
+                self._tiers.insert(index, urls)
                 if not keep_empty_tier: self._dropEmptyTier()
             else:
                 raise ValueError('Invalid index.')
 
-        elif isinstance(urls, Sequence) and all(isinstance(item, Sequence) for item in urls):
+        elif isinstance(urls, Sequence) and all(isinstance(item, Sequence) for item in urls
+                                                ) and all(isinstance(item, str) for item in chain.from_iterable(urls)):
             urls = [list(lu) for lu in urls]
             index = 0 if index is None else index
             if isinstance(index, int):
                 index = handleIntIdx(index, len(self))
                 index = list(range(index, index + len(urls)))
-            elif isinstance(index, Sequence):
-                if not all(isinstance(i, int) for i in index): raise ValueError('Invalid index.')
+            elif isinstance(index, Sequence) and all(isinstance(i, int) for i in index):
                 if len(index) != len(urls): raise ValueError('Invalid index length.')
                 index = handleIntIdx(index, len(self))
                 index, urls = list(zip(*sorted(zip(index, urls), key=lambda x: x[0])))  # must be stable sort
@@ -331,57 +329,41 @@ class Trackers():
             for n_tier_added, (i, lu) in enumerate(zip(index, urls)):
                 if unique_in_tiers: self.remove(lu, keep_empty_tier=True)
                 i = i + n_tier_added
-                self._llu.insert(i, lu)
+                self._tiers.insert(i, lu)
             if not keep_empty_tier: self._dropEmptyTier()
 
         else:
             raise ValueError('Malformed urls input.')
-        self._alu = None
+        self._urls = None
 
-    def remove(self, urls: str|strs, keep_empty_tier: bool = _KPEPY):
+    def remove(self, urls: str|strs, keep_empty_tier: bool = KEEP_EMPTY_TIER):
         '''
         Remove specified tracker url(s) from all tiers.
 
         Arguments:
-        urls: str|strs, the tracker url(s) to be removed.
-        keep: bool=False, whether to keep tier(s) with no tracker left.
-        # count: int=0
-        #     only remove this number of occurrences.
-        #     if count <= 0, remove all occurrences.
-
+        urls: str|strs, one or more tracker urls to be removed.
+        keep_empty_tier: bool=False, whether to keep tier(s) with no tracker left after removal.
         '''
         urls = [urls] if isinstance(urls, str) else list(urls)
-        urls = [u.lower() for u in urls]
         if keep_empty_tier:
-            self._llu = [[u for u in _lu if (u.lower() not in urls)] for _lu in self._llu]
+            self._tiers = [[_url for _url in _tier if not any(compareURL(_url, url) for url in urls)]
+                           for _tier in self._tiers]
         else:
-            self._llu = [lu for _lu in self._llu if (lu := [u for u in _lu if (u.lower() not in urls)])]
-        self._alu = None
+            self._tiers = [
+                tier for _tier in self._tiers
+                if (tier := [_url for _url in _tier if not any(compareURL(_url, url) for url in urls)])
+                ]
+        self._urls = None
 
     def check(self) -> bool:
-        '''Check if all tracker urls are valid.'''
-        for tier in self._llu:
-            for url in tier:
-                if not TRACKER_URL_REGEX.match(url): return False
+        '''
+        Check if all tracker urls are valid.
+        For now, this only checks if the url matches a regex pattern.
+        '''
+        for _tier in self._tiers:
+            for _url in _tier:
+                if not TRACKER_URL_REGEX.match(_url): return False
         return True
-
-    def _dropMalformedURL(self):
-        for ul in self._llu:
-            for j, u in enumerate(ul[:]):
-                if not TRACKER_URL_REGEX.match(u):
-                    ul.pop(j)
-
-    def _dropDuplicatedURL(self):
-        for url in self.urls:
-            for ul in self._llu:
-                for j, u in enumerate(ul[:]):
-                    if u == url:
-                        ul.pop(j)
-
-    def _dropEmptyTier(self):
-        for i, ul in enumerate(self._llu[:]):
-            if not ul:
-                self._llu.pop(i)
 
     def clean(
         self,
@@ -404,11 +386,39 @@ class Trackers():
             self._dropDuplicatedURL()
         if not keep_empty_tier:
             self._dropEmptyTier()
+        self._urls = None
 
     def clear(self):
         '''Remove all tracker urls.'''
-        self._llu = []
-        self._alu = []
+        self._tiers = []
+        self._urls = []
+
+    #* -----------------------------------------------------------------------------------------------------------------
+    #* internal methods
+    #* -----------------------------------------------------------------------------------------------------------------
+
+    def _dropMalformedURL(self):
+        for _tier in self._tiers:
+            for j, _url in enumerate(_tier):
+                if not TRACKER_URL_REGEX.match(_url):
+                    _tier[j] = ''
+            _tier[:] = [_url for _url in _tier if _url]
+        self._urls = None
+
+    def _dropDuplicatedURL(self):
+        seen_urls: set[str] = set()
+        for _tier in self._tiers:
+            for i, _url in enumerate(_tier):
+                if any(compareURL(_url, url) for url in seen_urls):
+                    _tier[i] = ''
+                else:
+                    seen_urls.add(_url)
+            _tier[:] = [_url for _url in _tier if _url]
+        self._urls = None
+
+    def _dropEmptyTier(self):
+        self._tiers = [_tier for _tier in self._tiers if _tier]
+        self._urls = None
 
     #* -----------------------------------------------------------------------------------------------------------------
     #* special methods
@@ -422,77 +432,89 @@ class Trackers():
     def __getitem__(self, key: slice|Sequence[int]) -> list[list[str]]:
         ...
 
-    def __getitem__(self, key: int|slice|Sequence[int]) -> list[str]|list[list[str]]:
+    def __getitem__(self, key):
         '''Get tracker urls of specified tier(s).'''
         if isinstance(key, int):
-            return self._llu[key][:]
+            return self._tiers[key][:]
         elif isinstance(key, slice):
-            return [lu[:] for lu in self._llu[key]]
+            return [_tier[:] for _tier in self._tiers[key]]
         elif isinstance(key, Sequence) and all(isinstance(i, int) for i in key):
-            return [self._llu[i][:] for i in set(key)]
+            return [self._tiers[i][:] for i in key]
         else:
             raise TypeError('Invalid index.')
 
-    def __setitem__(self, key: int, values: str|strs):
-        '''Set the tracker urls in the specified tier if index is int.'''
+    @overload
+    def __setitem__(self, key: int, value: str|strs):
+        ...
+
+    @overload
+    def __setitem__(self, key: slice|Sequence[int], value: Sequence[strs]):
+        ...
+
+    def __setitem__(self, key, value):
+        '''Set tracker urls to specified tier.'''
         if isinstance(key, int):
-            self.set(values, index=key, check_format=_CHECK, raise_malformed=_RAISE)
+            self.set(value, index=key)
+        elif isinstance(key, slice):
+            self.set(value, index=key)
+        elif isinstance(key, Sequence) and all(isinstance(i, int) for i in key):
+            self.set(value, index=list(key))
         else:
-            self[key] = values
+            raise TypeError('Invalid index.')
 
     def __delitem__(self, index: int|slice|Sequence[int]):
-        '''Delete the specified tier.'''
+        '''Delete specified tier(s).'''
         if isinstance(index, int):
-            del self._llu[index]
-            self._alu = None
+            del self._tiers[index]
+            self._urls = None
         elif isinstance(index, slice):
-            del self._llu[index]
-            self._alu = None
+            del self._tiers[index]
+            self._urls = None
         elif isinstance(index, Sequence) and all(isinstance(i, int) for i in index):
-            for i in sorted(index, reverse=True):
-                del self._llu[i]
-            self._alu = None
+            for i in index:
+                self._tiers[i] = []
+            self._dropEmptyTier()
         else:
             raise TypeError('Invalid index.')
 
     def __len__(self) -> int:
         '''Get the number of tiers.'''
-        return len(self._llu)
+        return len(self._tiers)
+
+    def __contains__(self, url: str) -> bool:
+        '''Alias of `has(url)`.'''
+        return self.has(url)
 
     #* -----------------------------------------------------------------------------------------------------------------
     #* operators
     #* -----------------------------------------------------------------------------------------------------------------
 
-    def __contains__(self, url: str) -> bool:
-        '''Check if the specified tracker url exists.'''
-        return self.has(url)
-
     def __add__(self, urls: str|strs|Sequence[strs]) -> 'Trackers':
-        '''Prepend the specified tracker url(s) as the new 1st tier.'''
+        '''Alias of `insert(urls)`.'''
         self.insert(urls)
         return self
 
     def __radd__(self, urls: str|strs|Sequence[strs]) -> 'Trackers':
-        '''Prepend the specified tracker url(s) as the new 1st tier.'''
+        '''Alias of `insert(urls)`.'''
         self.insert(urls)
         return self
 
     def __iadd__(self, urls: str|strs|Sequence[strs]):
-        '''Prepend the specified tracker url(s) as the new 1st tier.'''
+        '''Alias of `insert(urls)`.'''
         self.insert(urls)
 
     def __sub__(self, urls: str|strs) -> 'Trackers':
-        '''Remove the specified tracker url(s).'''
+        '''Alias of `remove(urls)`.'''
         self.remove(urls)
         return self
 
     def __rsub__(self, urls: str|strs) -> 'Trackers':
-        '''Remove the specified tracker url(s).'''
+        '''Alias of `remove(urls)`.'''
         self.remove(urls)
         return self
 
     def __isub__(self, urls: str|strs):
-        '''Remove the specified tracker url(s).'''
+        '''Alias of `remove(urls)`.'''
         self.remove(urls)
 
     #* -----------------------------------------------------------------------------------------------------------------
@@ -506,7 +528,7 @@ class Trackers():
         In practice, this means the first tracker url in the `announce-list` entry.
         '''
         try:
-            return self._llu[0][0]
+            return self._tiers[0][0]
         except IndexError:
             return None
 
@@ -527,15 +549,20 @@ class Trackers():
         Note that this property returns a shallow copy of the tracker list.
         i.e. list operations on the returned list or its nested lists has no effect on the original tracker list.
         '''
-        return [lu[:] for lu in self._llu] if len(self.urls) > 1 else None
+        return [_tier[:] for _tier in self._tiers] if len(self.urls) >= 2 else None
 
     @announce_list.setter
     def announce_list(self, urls: strs|Sequence[strs]):
         '''Overwrite the whole tracker list with at least 2 trackers.'''
-        new_urls = list(urls) if all(isinstance(u, str) for u in urls) else list(chain.from_iterable(urls))
-        new_urls = cast(list[str], new_urls)  #! cast to list[str] to avoid pyright error
-        new_urls = [u for u in list(set(new_urls)) if u]
-        if len(new_urls) < 2:
+        if all(isinstance(u, str) for u in urls):
+            urls = cast(strs, urls)  #! cast to list[str] to avoid pyright error
+            new_urls = list(urls)
+        elif all(isinstance(u, Sequence) for u in urls) and all(isinstance(u, str) for u in chain.from_iterable(urls)):
+            urls = cast(Sequence[strs], urls)
+            new_urls = list(chain.from_iterable(urls))
+        else:
+            raise ValueError('Malformed urls input.')
+        if len([u for u in list(set(new_urls)) if u]) < 2:
             raise ValueError('At least 2 trackers are required for setting announce-list.')
         else:
             self.clear()
