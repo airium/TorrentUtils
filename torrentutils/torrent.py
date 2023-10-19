@@ -5,7 +5,6 @@ __all__ = ['Torrent', 'fromTorrent', 'fromFiles']
 
 import re
 import os
-import copy
 import math
 import time
 import codecs
@@ -20,7 +19,12 @@ from typing import Iterable, Optional, Any
 from torrentutils.hasher import toSHA1
 from torrentutils.bencode import bencode
 from torrentutils.bencode import bdecode4torrent as bdecode
+from torrentutils.tracker import Trackers
 import torrentutils.job as trtjob
+from torrentutils.type import strs
+
+from collections.abc import Sequence
+from typing import Optional
 
 try:
     import dateutil.parser
@@ -34,15 +38,11 @@ _ASCII_CHAR_REGEX = re.compile(r'[a-z0-9]+', re.IGNORECASE)
 _INVALID_CHAR_REGEX = re.compile(r'(\s|[\/:*?"<>|])')
 
 
-
-
 def fromTorrent(path):
     '''Wrapper function to read a torrent file and return it.'''
     torrent = Torrent()
     torrent.read(Path(path))
     return torrent
-
-
 
 
 def fromFiles(path):
@@ -52,21 +52,17 @@ def fromFiles(path):
     return torrent
 
 
-
-
 @dataclass
 class _TorrentMeta():
 
     '''The basic yet most common metadata of a torrent'''
 
-    trackers: list[str] = field(default_factory=list)  # the list of tracker urls
+    trackers: Trackers = Trackers()  # a `Trackers` instance that actually manages the tracker list
     comment: str = ''  # the comment message
     creator: str = ''  # the creator of the torrent
     date: int = 0  # the creation time
     encoding: str = _ENCODING  # the encoding for text
     hash: str = ''  # the hash of the torrent
-
-
 
 
 @dataclass
@@ -83,8 +79,6 @@ class _TorrentInfo():
     source: str = ''  # the special message particularly used by private trackers
 
 
-
-
 @dataclass
 class _FileInfo():
     path: tuple[str, ...]
@@ -93,8 +87,6 @@ class _FileInfo():
     @property
     def info(self) -> tuple[tuple[str, ...], int]:
         return (self.path, self.size)
-
-
 
 
 class Torrent():
@@ -169,25 +161,29 @@ class Torrent():
 
     @property
     def announce(self) -> Optional[str]:
-        '''Return the first tracker url if exists.'''
-        return self._meta.trackers[0][:] if self._meta.trackers else None
+        '''
+        Return the `announce` entry of the torrent.
+        In practice, this means the first tracker url of the torrent.
+        '''
+        return self._meta.trackers.announce
 
     @announce.setter
     def announce(self, url: str):
-        '''Overwrite the first tracker url.'''
-        self.setTracker([url] + self._meta.trackers[1:])
+        '''
+        Modify the `announce` entry of the torrent.
+        In practice, this means the first tracker url of the torrent.
+        '''
+        self._meta.trackers.announce = url
 
     @property
-    def announce_list(self) -> Optional[list[str]]:
+    def announce_list(self) -> Optional[list[list[str]]]:
         '''Return all trackers if total trackers >=2.'''
-        return copy.deepcopy(self._meta.trackers) if self.num_tracker >= 2 else None
+        return self._meta.trackers.announce_list
 
     @announce_list.setter
-    def announce_list(self, urls: Iterable[str]):
+    def announce_list(self, urls: strs|Sequence[strs]):
         '''Overwrite the whole tracker list with at least 2 trackers.'''
-        urls = list(urls)  #! we dont have input check here, which may result in a bug
-        if len(urls) < 2: raise ValueError(f'You must supply >=2 trackers to `announce-list` (got {len(urls)}.')
-        self.setTracker(urls)
+        self._meta.trackers.announce_list = urls
 
     @property
     def comment(self) -> Optional[str]:
@@ -326,18 +322,36 @@ class Torrent():
     #* -----------------------------------------------------------------------------------------------------------------
 
     @property
-    def tracker_list(self) -> list[str]:
+    def trackers(self) -> Trackers:
+        '''
+        Return the internal `TrackerList` instance which provides more tracker-related methods.
+        Note that modifying the tracker list instance will not trigger any queued writing job.
+        '''
+        return self._meta.trackers
+
+    @property
+    def tracker_list(self) -> list[list[str]]:
         '''Unlike `announce` and `announce_list`, this function always returns the full tracker list.'''
-        return self._meta.trackers[:]
+        return [tier[:] for tier in self._meta.trackers]
 
     @tracker_list.setter
-    def tracker_list(self, urls: Iterable[str]):
+    def tracker_list(self, urls: str|strs):
         '''Set the whole list of tracker urls.'''
         self.setTracker(urls)
 
     @property
+    def tracker_urls(self) -> list[str]:
+        '''Return the list of tracker urls.'''
+        return self._meta.trackers.urls
+
+    @property
     def num_tracker(self) -> int:
         '''Return the number of trackers. Read-only.'''
+        return len(self._meta.trackers)
+
+    @property
+    def num_tracker_tier(self) -> int:
+        '''Return the number of tracker tiers. Read-only.'''
         return len(self._meta.trackers)
 
     @property
@@ -353,7 +367,7 @@ class Torrent():
     @property
     def torrent_size(self) -> int:
         '''Return the file size of the torrent file itself. Read-only.'''
-        return len(bencode(self.torrent_dict, self.encoding))
+        return len(bencode(self.torrent_dict, self.encoding or _ENCODING))
 
     @property
     def num_pieces(self) -> int:
@@ -373,7 +387,7 @@ class Torrent():
             ret += f"&dn={urllib.parse.quote(self.name)}"
         if self.size:
             ret += f"&xl={self.size}"
-        for url in self.tracker_list:
+        for url in self.tracker_urls:
             ret += f"&tr={urllib.parse.quote(url)}"
         return ret
 
@@ -499,16 +513,7 @@ class Torrent():
     #! Check the returned `TorrentJob` instance to monitor the result.
     #* -----------------------------------------------------------------------------------------------------------------
 
-    @staticmethod
-    def chkTracker(urls: str|Iterable[str]) -> list[str]:
-        '''Check the input tracker(s), return a list version of the input.'''
-        # TODO: add url check
-        urls = [urls] if isinstance(urls, str) else list(urls)
-        if not all(isinstance(url, str) for url in urls): raise TypeError('Some supplied tracker is non-str.')
-        if not all(urls): raise ValueError('Tracker url cannot be empty.')
-        return urls
-
-    def addTracker(self, urls: str|Iterable[str], top=True) -> trtjob.AddTrackerJob:
+    def addTracker(self, urls: str|strs, top=True) -> trtjob.AddTrackerJob:
         '''
         Add one or more trackers.
 
@@ -520,12 +525,12 @@ class Torrent():
         Returns:
         A `TorrentAddTrackerJob` instance.
         '''
-        urls = self.chkTracker(urls)
+        urls = [urls] if isinstance(urls, str) else list(urls)
         torrent_job = trtjob.AddTrackerJob(self, urls, top)
         self._addJob(torrent_job)
         return torrent_job
 
-    def setTracker(self, urls: str|Iterable[str]) -> trtjob.SetTrackerJob:
+    def setTracker(self, urls: str|strs) -> trtjob.SetTrackerJob:
         '''
         Overwrite the tracker list with the given one or more urls, dropping all existing ones.
 
@@ -536,12 +541,12 @@ class Torrent():
         Returns:
         A `TorrentSetTrackerJob` instance.
         '''
-        urls = self.chkTracker(urls)
+        urls = [urls] if isinstance(urls, str) else list(urls)
         torrent_job = trtjob.SetTrackerJob(self, urls)
         self._addJob(torrent_job)
         return torrent_job
 
-    def rmTracker(self, urls: str|Iterable[str]) -> trtjob.RemoveTrackerJob:
+    def rmTracker(self, urls: str|strs) -> trtjob.RemoveTrackerJob:
         '''
         Remove one or more trackers from the tracker list.
 
@@ -551,7 +556,7 @@ class Torrent():
         Returns:
         A `TorrentRemoveTrackerJob` instance.
         '''
-        urls = self.chkTracker(urls)
+        urls = [urls] if isinstance(urls, str) else list(urls)
         torrent_job = trtjob.RemoveTrackerJob(self, urls)
         self._addJob(torrent_job)
         return torrent_job
@@ -854,7 +859,7 @@ class Torrent():
         template.read(tpath)
         for key in include_key.difference(exclude_key):
             if key == 'tracker':
-                self.addTracker(template.tracker_list)
+                self.addTracker(template.trackers)
                 continue
             elif key == 'comment' and template.comment:
                 self.comment = template.comment
@@ -907,7 +912,7 @@ class Torrent():
             raise FileExistsError(f'The target "{tpath}" already exists.')
         else:
             tpath.parent.mkdir(parents=True, exist_ok=True)
-            tpath.write_bytes(bencode(self.torrent_dict, self.encoding))
+            tpath.write_bytes(bencode(self.torrent_dict, self.encoding or _ENCODING))
 
     def verify(self, spath) -> trtjob.TorrentVerifyJob:
         '''
@@ -947,11 +952,11 @@ class Torrent():
         if self.piece_length * self.num_pieces < self.size:
             ret.append('Too less pieces for content size.')
         try:
-            codecs.lookup(self.encoding)
+            codecs.lookup(self.encoding or _ENCODING)
         except LookupError as e:
             ret.append(f"Invalid encoding {self.encoding}.")
         try:
-            bencode(self.torrent_dict, self.encoding)
+            bencode(self.torrent_dict, self.encoding or _ENCODING)
         except Exception as e:
             ret.append(f"Torrent bencoding failed ({e}).")
         return ret

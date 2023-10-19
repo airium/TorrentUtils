@@ -16,11 +16,9 @@ except ImportError:
     HAS_NATSORT = False
 
 
-
-
 class TorrentJob:
 
-    def __init__(self, torrent: trt.Torrent, job_name: Optional[str] = None):
+    def __init__(self, torrent: trt.Torrent, job_name: str|None = None):
         self._torrent = torrent
         self._job_name = job_name or ''
 
@@ -80,51 +78,56 @@ class TorrentJob:
         return copy.copy(self._result)
 
 
-
-
 class AddTrackerJob(TorrentJob):
 
-    def __init__(self, torrent: trt.Torrent, urls: list[str], top: bool = True, job_name: Optional[str] = None):
+    def __init__(
+        self,
+        torrent: trt.Torrent,
+        urls: str|list[str]|list[list[str]],
+        top: bool = True,
+        job_name: Optional[str] = None,
+        ):
         super().__init__(torrent=torrent, job_name=job_name)
         self._urls = urls
         self._top = top
 
     def _start(self):
-        if self._top:
-            self._torrent._meta.trackers = list(set(self._torrent._meta.trackers + self._urls))
-        else:
-            self._torrent._meta.trackers = list(set(self._urls + self._torrent._meta.trackers))
-
-
+        self._torrent.trackers.insert(self._urls, index=(0 if self._top else -1))
 
 
 class SetTrackerJob(TorrentJob):
 
-    def __init__(self, torrent: trt.Torrent, trackers: list[str], job_name: Optional[str] = None):
+    def __init__(
+        self,
+        torrent: trt.Torrent,
+        urls: str|list[str]|list[list[str]],
+        job_name: Optional[str] = None,
+        ):
         super().__init__(torrent=torrent, job_name=job_name)
-        self._trackers = trackers
+        self._trackers = urls
 
     def _start(self):
-        self._torrent._meta.trackers = list(set(self._trackers))
-
-
+        self._torrent._meta.trackers.set(self._trackers)
 
 
 class RemoveTrackerJob(TorrentJob):
 
-    def __init__(self, torrent: trt.Torrent, trackers: list[str], job_name: Optional[str] = None):
+    def __init__(
+        self,
+        torrent: trt.Torrent,
+        urls: list[str],
+        job_name: Optional[str] = None,
+        ):
         super().__init__(torrent=torrent, job_name=job_name)
-        self._tracker = trackers
+        self._tracker = urls
 
     def _start(self):
-        self._torrent._meta.trackers = list(set(self._torrent._meta.trackers) - set(self._tracker))
-
-
+        self._torrent._meta.trackers.remove(self._tracker)
 
 
 class SetCommentJob(TorrentJob):
 
-    def __init__(self, torrent: trt.Torrent, comment: str, job_name: Optional[str] = None):
+    def __init__(self, torrent: trt.Torrent, comment: str, job_name: str|None = None):
         super().__init__(torrent=torrent, job_name=job_name)
         self._comment = comment
 
@@ -132,11 +135,9 @@ class SetCommentJob(TorrentJob):
         self._torrent._meta.comment = self._comment
 
 
-
-
 class SetCreatorJob(TorrentJob):
 
-    def __init__(self, torrent: trt.Torrent, creator: str, job_name: Optional[str] = None):
+    def __init__(self, torrent: trt.Torrent, creator: str, job_name: str|None = None):
         super().__init__(torrent=torrent, job_name=job_name)
         self._creator = creator
 
@@ -144,11 +145,9 @@ class SetCreatorJob(TorrentJob):
         self._torrent._meta.creator = self._creator
 
 
-
-
 class SetDateJob(TorrentJob):
 
-    def __init__(self, torrent: trt.Torrent, date: int, job_name: Optional[str] = None):
+    def __init__(self, torrent: trt.Torrent, date: int, job_name: str|None = None):
         super().__init__(torrent=torrent, job_name=job_name)
         self._date = date
 
@@ -156,11 +155,9 @@ class SetDateJob(TorrentJob):
         self._torrent._meta.date = self._date
 
 
-
-
 class SetEncodingJob(TorrentJob):
 
-    def __init__(self, torrent: trt.Torrent, encoding: str, job_name: Optional[str] = None):
+    def __init__(self, torrent: trt.Torrent, encoding: str, job_name: str|None = None):
         super().__init__(torrent=torrent, job_name=job_name)
         self._encoding = encoding
 
@@ -168,23 +165,19 @@ class SetEncodingJob(TorrentJob):
         self._torrent._meta.encoding = self._encoding
 
 
-
-
 class SetNameJob(TorrentJob):
 
-    def __init__(self, torrent: trt.Torrent, name: str, job_name: Optional[str] = None):
+    def __init__(self, torrent: trt.Torrent, name: str, job_name: str|None = None):
         super().__init__(torrent=torrent, job_name=job_name)
-        self._name = name
+        self._torrent_name = name
 
     def _start(self):
-        self._torrent._info.name = self._name
-
-
+        self._torrent._info.name = self._torrent_name
 
 
 class SetPieceLengthJob(TorrentJob):
 
-    def __init__(self, torrent: trt.Torrent, piece_length: int, job_name: Optional[str] = None):
+    def __init__(self, torrent: trt.Torrent, piece_length: int, job_name: str|None = None):
         super().__init__(torrent=torrent, job_name=job_name)
         self._piece_length = piece_length
 
@@ -195,11 +188,9 @@ class SetPieceLengthJob(TorrentJob):
             self._torrent._info.pieces = b''
 
 
-
-
 class SetPrivateJob(TorrentJob):
 
-    def __init__(self, torrent: trt.Torrent, private: int, job_name: Optional[str] = None):
+    def __init__(self, torrent: trt.Torrent, private: bool, job_name: str|None = None):
         super().__init__(torrent=torrent, job_name=job_name)
         self._private = private
 
@@ -207,11 +198,9 @@ class SetPrivateJob(TorrentJob):
         self._torrent._info.private = self._private
 
 
-
-
 class SetSourceJob(TorrentJob):
 
-    def __init__(self, torrent: trt.Torrent, source: str, job_name: Optional[str] = None):
+    def __init__(self, torrent: trt.Torrent, source: str, job_name: str|None = None):
         super().__init__(torrent=torrent, job_name=job_name)
         self._source = source
 
@@ -219,11 +208,9 @@ class SetSourceJob(TorrentJob):
         self._torrent._info.source = self._source
 
 
-
-
 class ReadTorrentJob(TorrentJob):
 
-    def __init__(self, torrent: trt.Torrent, path: Path, job_name: Optional[str] = None):
+    def __init__(self, torrent: trt.Torrent, path: Path, job_name: str|None = None):
         super().__init__(torrent=torrent, job_name=job_name)
         self._path = path
 
@@ -231,12 +218,10 @@ class ReadTorrentJob(TorrentJob):
         pass
 
 
-
-
 class TorrentLoadSourceFilesJob(TorrentJob):
 
     def __init__(
-        self, torrent: trt.Torrent, path: Path, keep_name: bool = False, nproc: int = 1, job_name: Optional[str] = None
+        self, torrent: trt.Torrent, path: Path, keep_name: bool = False, nproc: int = 1, job_name: str|None = None
         ):
         super().__init__(torrent=torrent, job_name=job_name)
         self._path = path
@@ -298,11 +283,9 @@ class TorrentLoadSourceFilesJob(TorrentJob):
         self._torrent._info.files = [(p.relative_to(self._path).parts, s) for (p, s) in zip(fpaths, file_sizes)]
 
 
-
-
 class TorrentVerifyJob(TorrentJob):
 
-    def __init__(self, torrent: trt.Torrent, spath: Path, job_name: Optional[str] = None):
+    def __init__(self, torrent: trt.Torrent, spath: Path, job_name: str|None = None):
         super().__init__(torrent=torrent, job_name=job_name)
         self._spath = spath
 
